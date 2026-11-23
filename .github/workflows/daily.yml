@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       force_post:
-        description: "Post immediately instead of waiting for the next two-hour deadline"
+        description: "Post immediately instead of waiting for the next three-hour Eastern clock time"
         required: false
         type: boolean
         default: false
   schedule:
-    # Retry check every 15 minutes; bot.py posts only when its two-hour deadline is due.
+    # Check every 15 minutes; bot.py posts at the next fixed 3-hour Eastern clock time.
     - cron: "7,22,37,52 * * * *"
 
 permissions:
@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check whether a new GATE post is due
+      - name: Check whether the next 3-hour Eastern board post is due
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
