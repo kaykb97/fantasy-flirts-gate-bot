@@ -111,8 +111,7 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
 def next_refresh_timestamp(now_ts: int) -> int:
     """Next 15-minute clock boundary in Eastern Time (:00, :15, :30, :45)."""
     now_local = datetime.fromtimestamp(now_ts, SCHEDULE_TIMEZONE)
-    next_hour = now_local.hour
-    boundary = now_local.replace(minute=(now_local.minute // 15 + 1) * 15, second=0, microsecond=0)
+    boundary = now_local.replace(second=0, microsecond=0) + timedelta(minutes=15 - (now_local.minute % 15))
     return int(boundary.timestamp())
 
 def build_embed(now: datetime) -> dict:
