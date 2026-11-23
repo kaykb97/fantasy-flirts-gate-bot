@@ -136,7 +136,7 @@ def build_embed(now: datetime) -> dict:
         "description": description,
         "color": EMBED_BLUE,
         "footer": {
-            "text": f"💙 Flirtingway's  •  ⏱ Next refresh <t:{next_refresh}:R>"
+            "text": "💙 Flirtingway's Gate Guide  •  Predictions are estimates"
         },
     }
 
@@ -181,9 +181,11 @@ def main():
 
     state, state_sha = read_state(repo, token)
     message_id = state.get("message_id")
+    now = datetime.now(timezone.utc)
+    next_refresh = next_refresh_timestamp(int(now.timestamp()))
     payload = {
-        "content": "",
-        "embeds": [build_embed(datetime.now(timezone.utc))],
+        "content": f"⏱ **Next board refresh:** <t:{next_refresh}:R>",
+        "embeds": [build_embed(now)],
         "allowed_mentions": {"parse": []},
     }
 
