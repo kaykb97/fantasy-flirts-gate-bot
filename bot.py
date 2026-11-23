@@ -5,7 +5,7 @@ Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
-The workflow checks every 15 minutes, but this script creates a NEW Discord
+The workflow checks every 5 minutes, but this script creates a NEW Discord
 message only when the saved two-hour clock deadline is due. Manual runs do not bypass
 the deadline unless FORCE_POST=true. The webhook's saved Discord name and avatar
 are used; this code intentionally does not override them.
