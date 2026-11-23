@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 import requests
 
 SLOT_SECONDS = 20 * 60
-GATES_TO_SHOW = 6
+GATES_TO_SHOW = 9
 REFRESH_INTERVAL_SECONDS = 2 * 60 * 60
 EMBED_BLUE = 0x287BFF
 
@@ -130,7 +130,7 @@ def build_embed(now: datetime) -> dict:
         lines.append(f"{time_text}  {emoji} **{gate}**  ·  {location}")
 
     description = (
-        "**NEXT SIX GATES**  ·  Times shown in your local timezone\n\n"
+        "**NEXT NINE GATES**  ·  Times shown in your local timezone\n\n"
         + "\n".join(lines)
     )
 
@@ -161,8 +161,14 @@ def read_state(repo: str, token: str):
     response.raise_for_status()
     saved = response.json()
     try:
-        raw = base64.b64decode(saved["content"]).decode("utf-8")
-        return json.loads(raw), saved["sha"]
+        raw = base64.b64decode(saved["content"]).decode("utf-8").strip()
+        # Repair the legacy file ending: the old writer saved literal backslash+n.
+        if raw.endswith("\\n"):
+            raw = raw[:-2].rstrip()
+        state = json.loads(raw)
+        if not isinstance(state, dict):
+            raise ValueError("Saved state must be a JSON object")
+        return state, saved["sha"]
     except (KeyError, ValueError, json.JSONDecodeError):
         return {}, saved.get("sha")
 
@@ -170,41 +176,6 @@ def write_state(repo: str, token: str, state: dict, sha: str | None):
     url = f"https://api.github.com/repos/{repo}/contents/state.json"
     encoded = base64.b64encode(
         (json.dumps(state, indent=2) + "\n").encode("utf-8")
-    ).decode("ascii")
-    payload = {
-        "message": "Save Flirtingway GATE posting schedule",
-        "content": encoded,
-        "branch": "main",
-    }
-    if sha:
-        payload["sha"] = sha
-    response = requests.put(url, headers=github_headers(token), json=payload, timeout=20)
-    response.raise_for_status()
-
-def github_headers(token: str) -> dict:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-def read_state(repo: str, token: str):
-    url = f"https://api.github.com/repos/{repo}/contents/state.json"
-    response = requests.get(url, headers=github_headers(token), timeout=20)
-    if response.status_code == 404:
-        return {}, None
-    response.raise_for_status()
-    saved = response.json()
-    try:
-        raw = base64.b64decode(saved["content"]).decode("utf-8")
-        return json.loads(raw), saved["sha"]
-    except (KeyError, ValueError, json.JSONDecodeError):
-        return {}, saved.get("sha")
-
-def write_state(repo: str, token: str, state: dict, sha: str | None):
-    url = f"https://api.github.com/repos/{repo}/contents/state.json"
-    encoded = base64.b64encode(
-        (json.dumps(state, indent=2) + "\\n").encode("utf-8")
     ).decode("ascii")
     payload = {
         "message": "Save Flirtingway GATE posting schedule",
