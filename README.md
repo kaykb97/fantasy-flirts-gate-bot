@@ -50,11 +50,11 @@ python -m pip install -r requirements.txt
 DISCORD_WEBHOOK_URL="your-webhook-url" python bot.py
 ```
 
-A local run follows the same fixed two-hour Eastern clock schedule unless `FORCE_POST=true` is set. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
+A local run follows the same fixed 15-minute Eastern clock schedule unless `FORCE_POST=true` is set. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
 
 ## Files
 
-- `bot.py` — prediction algorithm, nine-gate board, and fixed two-hour Eastern posting schedule
+- `bot.py` — prediction algorithm, nine-gate board, and fixed 15-minute Eastern posting schedule
 - `.github/workflows/daily.yml` — 15-minute checks for fixed Eastern clock deadlines
 - `requirements.txt` — HTTP dependency
 - `ATTRIBUTION.md` — upstream project credit/license note
