@@ -213,7 +213,7 @@ def main():
         })
         write_state(repo, token, state, state_sha)
         print(
-            "Initialized the fixed Eastern two-hour schedule. "
+            "Initialized the fixed Eastern 15-minute schedule. "
             f"Next post is due at {datetime.fromtimestamp(next_boundary, SCHEDULE_TIMEZONE).isoformat()}."
         )
         return
