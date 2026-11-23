@@ -1,13 +1,12 @@
 """
-Fantasy Flirts — rolling Gold Saucer GATE board.
+Flirtingways Gate Guide — blue-themed rolling Gold Saucer GATE board.
 
 Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
-Every workflow run edits the same Discord webhook message. If the message was
-deleted or is missing, the bot creates a replacement and saves its ID in
-state.json in this GitHub repository.
+Every workflow run edits the same Discord webhook message. The webhook's saved
+Discord name and avatar are used: this code intentionally does not override them.
 """
 from __future__ import annotations
 
@@ -20,7 +19,8 @@ from urllib.parse import quote
 import requests
 
 SLOT_SECONDS = 20 * 60
-GATES_TO_SHOW = 6  # Six 20-minute GATE slots = the next two hours.
+GATES_TO_SHOW = 6
+EMBED_BLUE = 0x287BFF
 
 AFO_CIELDALAES = (
     ("Cieldalaes — Sea Route", 1),
@@ -102,32 +102,34 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     variant = weighted_pick(gate.variants, d2)[0] if gate.variants else None
     return gate.name, variant
 
-def discord_timestamp(unix_seconds: int) -> str:
-    # Discord displays this timestamp in each viewer's local timezone.
-    return f"<t:{unix_seconds}:t>"
-
-def build_board(now: datetime) -> str:
+def build_embed(now: datetime) -> dict:
     now_ts = int(now.timestamp())
     first_slot = ((now_ts // SLOT_SECONDS) + 1) * SLOT_SECONDS
-    lines = [
-        "🐰 **FANTASY FLIRTS — GOLD SAUCER GATE BOARD**",
-        f"**Next {GATES_TO_SHOW} GATEs · refreshed <t:{now_ts}:R>**",
-        "",
-        "Times display automatically in your own Discord local timezone.",
-        "",
-    ]
+
+    fields = []
     for index in range(GATES_TO_SHOW):
         ts = first_slot + index * SLOT_SECONDS
         gate, variant = predict_gate(ts)
         emoji = EMOJI.get(gate, "🎟️")
-        extra = f" — {variant}" if variant else ""
-        lines.append(f"{discord_timestamp(ts)}  {emoji} **{gate}**{extra}")
-    lines += [
-        "",
-        "🦘 Leap of Faith  ·  ✈️ Air Force One",
-        "_GATE predictions use community-researched timing data; verify after game patches._",
-    ]
-    return "\n".join(lines)
+        fields.append({
+            "name": f"<t:{ts}:t>  {emoji} {gate}",
+            "value": variant or "Event Square",
+            "inline": False,
+        })
+
+    return {
+        "title": "✨ GOLD SAUCER GATE BOARD",
+        "description": (
+            "**THE NEXT SIX GATES**\n"
+            "Times automatically display in your own Discord local timezone."
+        ),
+        "color": EMBED_BLUE,
+        "fields": fields,
+        "footer": {
+            "text": "💙 Flirtingways • Automatically refreshed every 2 hours"
+        },
+        "timestamp": now.isoformat(),
+    }
 
 def github_headers(token: str) -> dict:
     return {
@@ -152,7 +154,7 @@ def write_state(repo: str, token: str, state: dict, sha: str | None):
         (json.dumps(state, indent=2) + "\n").encode("utf-8")
     ).decode("ascii")
     payload = {
-        "message": "Save Gold Saucer board message ID",
+        "message": "Save Flirtingways GATE board message ID",
         "content": content,
         "branch": "main",
     }
@@ -170,36 +172,30 @@ def main():
 
     state, state_sha = read_state(repo, token)
     message_id = state.get("message_id")
-    content = build_board(datetime.now(timezone.utc))
+    payload = {
+        "content": "",
+        "embeds": [build_embed(datetime.now(timezone.utc))],
+        "allowed_mentions": {"parse": []},
+    }
 
     if message_id:
         edit_url = f"{webhook}/messages/{quote(str(message_id), safe='')}"
-        response = requests.patch(
-            edit_url,
-            json={"content": content, "allowed_mentions": {"parse": []}},
-            timeout=20,
-        )
+        response = requests.patch(edit_url, json=payload, timeout=20)
         if response.status_code == 404:
             message_id = None
         else:
             response.raise_for_status()
-            print(f"Updated existing GATE board message {message_id}.")
+            print(f"Updated existing Flirtingways GATE board message {message_id}.")
             return
 
-    # No saved message yet (or it was deleted): create one and remember its ID.
-    response = requests.post(
-        webhook + "?wait=true",
-        json={
-            "content": content,
-            "username": "Fantasy Flirts GATE Guide",
-            "allowed_mentions": {"parse": []},
-        },
-        timeout=20,
-    )
+    # No saved message yet (or it was deleted): create it using the webhook's
+    # configured Discord name and avatar. Do not pass username/avatar_url here.
+    response = requests.post(webhook + "?wait=true", json=payload, timeout=20)
     response.raise_for_status()
     message_id = response.json()["id"]
     write_state(repo, token, {"message_id": message_id}, state_sha)
-    print(f"Created GATE board message {message_id}.")
+    print(f"Created Flirtingways GATE board message {message_id}.")
 
 if __name__ == "__main__":
     main()
+
