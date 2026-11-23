@@ -1,17 +1,18 @@
 """
-Flirtingways Gate Guide — blue-themed rolling Gold Saucer GATE board.
+Flirtingways Gate Guide — clean blue rolling Gold Saucer GATE board.
 
 Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
 Every workflow run edits the same Discord webhook message. The webhook's saved
-Discord name and avatar are used: this code intentionally does not override them.
+Discord name and avatar are used; this code intentionally does not override them.
 """
 from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -20,6 +21,7 @@ import requests
 
 SLOT_SECONDS = 20 * 60
 GATES_TO_SHOW = 6
+REFRESH_INTERVAL_SECONDS = 2 * 60 * 60
 EMBED_BLUE = 0x287BFF
 
 AFO_CIELDALAES = (
@@ -102,31 +104,43 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     variant = weighted_pick(gate.variants, d2)[0] if gate.variants else None
     return gate.name, variant
 
+def minutes_until_refresh(now_ts: int) -> int:
+    """Minutes until the next even-hour UTC GitHub Actions schedule boundary."""
+    next_run = ((now_ts // REFRESH_INTERVAL_SECONDS) + 1) * REFRESH_INTERVAL_SECONDS
+    return max(1, math.ceil((next_run - now_ts) / 60))
+
 def build_embed(now: datetime) -> dict:
     now_ts = int(now.timestamp())
     first_slot = ((now_ts // SLOT_SECONDS) + 1) * SLOT_SECONDS
+    lines = []
 
-    fields = []
     for index in range(GATES_TO_SHOW):
         ts = first_slot + index * SLOT_SECONDS
         gate, variant = predict_gate(ts)
         emoji = EMOJI.get(gate, "🎟️")
-        fields.append({
-            "name": f"<t:{ts}:t>  {emoji} {gate}",
-            "value": variant or "Event Square",
-            "inline": False,
-        })
+        time_text = f"<t:{ts}:t>"
+        location = variant or "Event Square"
+
+        # A compact, consistent two-line entry keeps the schedule easy to scan.
+        lines.append(f"{time_text}  {emoji} **{gate}**\n↳ {location}")
+
+    refresh_mins = minutes_until_refresh(now_ts)
+    description = (
+        "**THE NEXT SIX GATES**  ·  <t:"
+        + str(first_slot)
+        + ":R>\n\n"
+        + "\n\n".join(lines)
+    )
 
     return {
-        "title": "✨ GOLD SAUCER GATE BOARD",
-        "description": (
-            "**THE NEXT SIX GATES**\n"
-            "Times automatically display in your own Discord local timezone."
-        ),
+        "author": {
+            "name": "GOLD SAUCER • DAILY GATE SCHEDULE",
+        },
+        "title": "✨ Flirtingways GATE Board",
+        "description": description,
         "color": EMBED_BLUE,
-        "fields": fields,
         "footer": {
-            "text": "💙 Flirtingways • Automatically refreshed every 2 hours"
+            "text": f"💙 Flirtingways  •  ⏱ Next refresh in approximately {refresh_mins} min"
         },
         "timestamp": now.isoformat(),
     }
@@ -188,8 +202,8 @@ def main():
             print(f"Updated existing Flirtingways GATE board message {message_id}.")
             return
 
-    # No saved message yet (or it was deleted): create it using the webhook's
-    # configured Discord name and avatar. Do not pass username/avatar_url here.
+    # Create a replacement if the tracked message was deleted or is missing.
+    # Do not pass username/avatar_url: Discord's saved webhook identity is used.
     response = requests.post(webhook + "?wait=true", json=payload, timeout=20)
     response.raise_for_status()
     message_id = response.json()["id"]
@@ -198,4 +212,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
