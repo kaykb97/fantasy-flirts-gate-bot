@@ -121,28 +121,25 @@ def build_embed(now: datetime) -> dict:
         time_text = f"<t:{ts}:t>"
         location = variant or "Event Square"
 
-        # A compact, consistent two-line entry keeps the schedule easy to scan.
-        lines.append(f"{time_text}  {emoji} **{gate}**\n↳ {location}")
+        # One compact line per GATE reduces visual clutter.
+        lines.append(f"{time_text}  {emoji} **{gate}**  ·  {location}")
 
     refresh_mins = minutes_until_refresh(now_ts)
     description = (
-        "**THE NEXT SIX GATES**  ·  <t:"
-        + str(first_slot)
-        + ":R>\n\n"
-        + "\n\n".join(lines)
+        "**NEXT SIX GATES**  ·  Times shown in your local timezone\n\n"
+        + "\n".join(lines)
     )
 
     return {
         "author": {
             "name": "GOLD SAUCER • DAILY GATE SCHEDULE",
         },
-        "title": "✨ Flirtingways GATE Board",
+        "title": "✨ Flirtingway's GATE Board",
         "description": description,
         "color": EMBED_BLUE,
         "footer": {
-            "text": f"💙 Flirtingways  •  ⏱ Next refresh in approximately {refresh_mins} min"
+            "text": f"💙 Flirtingway's  •  ⏱ Next refresh in approximately {refresh_mins} min"
         },
-        "timestamp": now.isoformat(),
     }
 
 def github_headers(token: str) -> dict:
