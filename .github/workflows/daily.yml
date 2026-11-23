@@ -9,8 +9,8 @@ on:
         type: boolean
         default: false
   schedule:
-    # Check every minute; bot.py posts at each 15-minute Eastern clock boundary.
-    - cron: "* * * * *"
+    # Run at each quarter-hour; bot.py posts at each 15-minute Eastern clock boundary.
+    - cron: "0,15,30,45 * * * *"
 
 permissions:
   contents: write
