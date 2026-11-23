@@ -4,11 +4,11 @@ Posts a rolling prediction board showing the **next nine GATEs** (three hours of
 
 ## Important timezone behavior
 
-The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`<t:...:t>`), so **each member sees the schedule times in their own Discord-local timezone**. The board is refreshed every **two hours on the clock**: 12 AM, 2 AM, 4 AM, 6 AM, 8 AM, 10 AM, 12 PM, 2 PM, 4 PM, 6 PM, 8 PM, and 10 PM Eastern Time. Daylight saving time is handled automatically. Discord relative timestamps show each member the time remaining in their own local timezone.
+The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`<t:...:t>`), so **each member sees the schedule times in their own Discord-local timezone**. The board is refreshed every **15 minutes** (:00, :15, :30, and :45) in Eastern Time. Daylight saving time is handled automatically. Discord relative timestamps show each member the time remaining in their own local timezone.
 
 ## Free hosting: GitHub Actions + Discord webhook
 
-This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 5 minutes, but the bot posts a new board only when its saved two-hour Eastern clock deadline is due.
+This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 5 minutes, but the bot posts a new board only when its saved 15-minute Eastern clock deadline is due.
 
 ### 1. Create a Discord webhook in #events
 
@@ -30,7 +30,7 @@ This version does not need a continuously running bot process or a paid host. Gi
 1. Open the repository's **Actions** tab.
 2. If prompted, enable workflows.
 3. Open **Flirtingway GATE Scheduler** and choose **Run workflow** to run a check. To post immediately, select **Force post immediately**.
-4. Scheduled checks continue every 5 minutes; actual board posts follow the fixed two-hour Eastern clock schedule.
+4. Scheduled checks continue every 5 minutes; actual board posts follow the fixed 15-minute Eastern clock schedule.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
 
