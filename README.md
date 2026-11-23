@@ -8,7 +8,7 @@ The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`
 
 ## Free hosting: GitHub Actions + Discord webhook
 
-This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 15 minutes, but the bot posts a new board only when its saved two-hour Eastern clock deadline is due.
+This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 5 minutes, but the bot posts a new board only when its saved two-hour Eastern clock deadline is due.
 
 ### 1. Create a Discord webhook in #events
 
@@ -30,7 +30,7 @@ This version does not need a continuously running bot process or a paid host. Gi
 1. Open the repository's **Actions** tab.
 2. If prompted, enable workflows.
 3. Open **Flirtingway GATE Scheduler** and choose **Run workflow** to run a check. To post immediately, select **Force post immediately**.
-4. Scheduled checks continue every 15 minutes; actual board posts follow the fixed two-hour Eastern clock schedule.
+4. Scheduled checks continue every 5 minutes; actual board posts follow the fixed two-hour Eastern clock schedule.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
 
