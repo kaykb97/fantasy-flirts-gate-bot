@@ -1,19 +1,20 @@
-name: Update GATE Board
+name: Flirtingway GATE Scheduler
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 */2 * * *"
+    # Retry check every 15 minutes; bot.py posts only when its two-hour deadline is due.
+    - cron: "7,22,37,52 * * * *"
 
 permissions:
   contents: write
 
 concurrency:
-  group: fantasy-flirts-gate-board
+  group: flirtingways-gate-scheduler
   cancel-in-progress: false
 
 jobs:
-  update-gate-board:
+  check-and-post:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -27,8 +28,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Update Discord GATE board
+      - name: Check whether a new GATE post is due
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: python bot.py
