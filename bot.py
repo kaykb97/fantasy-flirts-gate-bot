@@ -10,8 +10,6 @@ Discord name and avatar are used; this code intentionally does not override them
 """
 from __future__ import annotations
 
-import base64
-import json
 import os
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -144,47 +142,11 @@ def build_embed(now: datetime) -> dict:
         },
     }
 
-def github_headers(token: str) -> dict:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-def read_state(repo: str, token: str):
-    url = f"https://api.github.com/repos/{repo}/contents/state.json"
-    response = requests.get(url, headers=github_headers(token), timeout=20)
-    if response.status_code == 404:
-        return {}, None
-    response.raise_for_status()
-    payload = response.json()
-    content = base64.b64decode(payload["content"]).decode("utf-8")
-    return json.loads(content), payload["sha"]
-
-def write_state(repo: str, token: str, state: dict, sha: str | None):
-    url = f"https://api.github.com/repos/{repo}/contents/state.json"
-    content = base64.b64encode(
-        (json.dumps(state, indent=2) + "\n").encode("utf-8")
-    ).decode("ascii")
-    payload = {
-        "message": "Save Flirtingways GATE board message ID",
-        "content": content,
-        "branch": "main",
-    }
-    if sha:
-        payload["sha"] = sha
-    response = requests.put(url, headers=github_headers(token), json=payload, timeout=20)
-    response.raise_for_status()
-
 def main():
     webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").rstrip("/")
-    token = os.environ.get("GITHUB_TOKEN")
-    repo = os.environ.get("GITHUB_REPOSITORY")
-    if not webhook or not token or not repo:
-        raise SystemExit("Missing DISCORD_WEBHOOK_URL, GITHUB_TOKEN, or GITHUB_REPOSITORY.")
+    if not webhook:
+        raise SystemExit("Missing DISCORD_WEBHOOK_URL.")
 
-    state, state_sha = read_state(repo, token)
-    message_id = state.get("message_id")
     now = datetime.now(timezone.utc)
     next_refresh = next_refresh_timestamp(int(now.timestamp()))
     payload = {
@@ -193,23 +155,13 @@ def main():
         "allowed_mentions": {"parse": []},
     }
 
-    if message_id:
-        edit_url = f"{webhook}/messages/{quote(str(message_id), safe='')}"
-        response = requests.patch(edit_url, json=payload, timeout=20)
-        if response.status_code == 404:
-            message_id = None
-        else:
-            response.raise_for_status()
-            print(f"Updated existing Flirtingways GATE board message {message_id}.")
-            return
-
-    # Create a replacement if the tracked message was deleted or is missing.
-    # Do not pass username/avatar_url: Discord's saved webhook identity is used.
+    # Always create a NEW Discord message on every workflow run.
+    # Do not edit or delete previous posts. Discord's saved webhook
+    # username and avatar are used automatically.
     response = requests.post(webhook + "?wait=true", json=payload, timeout=20)
     response.raise_for_status()
-    message_id = response.json()["id"]
-    write_state(repo, token, {"message_id": message_id}, state_sha)
-    print(f"Created Flirtingways GATE board message {message_id}.")
+    message_id = response.json().get("id")
+    print(f"Posted a new Flirtingway's GATE board message: {message_id}.")
 
 if __name__ == "__main__":
     main()
