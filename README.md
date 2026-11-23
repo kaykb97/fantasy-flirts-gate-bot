@@ -29,7 +29,7 @@ This version does not need a continuously running bot process or a paid host. Gi
 
 1. Open the repository's **Actions** tab.
 2. If prompted, enable workflows.
-3. Open **Daily GATE Schedule** and choose **Run workflow** to test immediately.
+3. Open **Flirtingway GATE Scheduler** and choose **Run workflow** to run a check. To post immediately, select **Force post immediately**.
 4. Scheduled checks continue every 15 minutes; actual board posts follow the saved two-hour deadline.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
@@ -50,11 +50,11 @@ python -m pip install -r requirements.txt
 DISCORD_WEBHOOK_URL="your-webhook-url" python bot.py
 ```
 
-This posts immediately. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
+A local run follows the same saved two-hour deadline unless `FORCE_POST=true` is set. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
 
 ## Files
 
-- `bot.py` — prediction algorithm and Discord posting
+- `bot.py` — prediction algorithm, nine-gate board, and two-hour posting schedule
 - `.github/workflows/daily.yml` — scheduled 15-minute deadline checks
 - `requirements.txt` — HTTP dependency
 - `ATTRIBUTION.md` — upstream project credit/license note
