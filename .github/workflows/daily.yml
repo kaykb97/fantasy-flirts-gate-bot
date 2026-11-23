@@ -2,6 +2,12 @@ name: Flirtingway GATE Scheduler
 
 on:
   workflow_dispatch:
+    inputs:
+      force_post:
+        description: "Post immediately instead of waiting for the next two-hour deadline"
+        required: false
+        type: boolean
+        default: false
   schedule:
     # Retry check every 15 minutes; bot.py posts only when its two-hour deadline is due.
     - cron: "7,22,37,52 * * * *"
@@ -34,4 +40,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          FORCE_POST: ${{ inputs.force_post }}
         run: python bot.py
