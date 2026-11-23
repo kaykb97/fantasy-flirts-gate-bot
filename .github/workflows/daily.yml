@@ -4,13 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       force_post:
-        description: "Post immediately instead of waiting for the next two-hour Eastern clock time"
+        description: "Post immediately instead of waiting for the next 15-minute Eastern clock time"
         required: false
         type: boolean
         default: false
   schedule:
-    # Check every 5 minutes; bot.py posts at the next fixed 2-hour Eastern clock time.
-    - cron: "*/5 * * * *"
+    # Check every minute; bot.py posts at each 15-minute Eastern clock boundary.
+    - cron: "* * * * *"
 
 permissions:
   contents: write
@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Check whether the next 2-hour Eastern board post is due
+      - name: Check whether the next 15-minute Eastern board post is due
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
