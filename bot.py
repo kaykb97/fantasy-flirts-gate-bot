@@ -1,31 +1,27 @@
 """
-Fantasy Flirts — FFXIV Gold Saucer GATE schedule poster.
+Fantasy Flirts — rolling Gold Saucer GATE board.
 
-Prediction method and current weights are adapted from:
+Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
-Original project is MIT-licensed. See ATTRIBUTION.md.
+See ATTRIBUTION.md.
 
-The game selects the same GATE for all worlds/regions on the same game version.
-Times in Discord are rendered in each member's own local timezone via Discord
-timestamp markup (<t:UNIX:t>).
+Every workflow run edits the same Discord webhook message. If the message was
+deleted or is missing, the bot creates a replacement and saves its ID in
+state.json in this GitHub repository.
 """
 from __future__ import annotations
 
+import base64
+import json
 import os
-from datetime import datetime, timezone, timedelta
-from typing import NamedTuple
+from datetime import datetime, timezone
+from urllib.parse import quote
 
 import requests
 
 SLOT_SECONDS = 20 * 60
-DAY_SECONDS = 24 * 60 * 60
+GATES_TO_SHOW = 6  # Six 20-minute GATE slots = the next two hours.
 
-class Weighted(NamedTuple):
-    name: str
-    weight: int
-    variants: tuple[tuple[str, int], ...] = ()
-
-# Order is significant. Keep in sync with the upstream research.
 AFO_CIELDALAES = (
     ("Cieldalaes — Sea Route", 1),
     ("Cieldalaes — Cave Route", 1),
@@ -46,6 +42,12 @@ CLIFF_VARIANTS = (
     ("Wonder Square East", 7),
 )
 SIMPLE_VARIANT = (("Event Square", 1),)
+
+class Weighted:
+    def __init__(self, name, weight, variants=()):
+        self.name = name
+        self.weight = weight
+        self.variants = variants
 
 EVENTS = {
     0: (
@@ -74,7 +76,6 @@ EMOJI = {
 }
 
 def xorshift128(seed: int):
-    """Upstream's xorshift128 variant: timestamp in x, other words zeroed."""
     x, y, z, w = seed & 0xFFFFFFFF, 0, 0, 0
     while True:
         t = (x ^ ((x << 11) & 0xFFFFFFFF)) & 0xFFFFFFFF
@@ -94,7 +95,6 @@ def weighted_pick(items, draw):
     return items[-1]
 
 def predict_gate(slot_start: int) -> tuple[str, str | None]:
-    """Predict one GATE at a Unix timestamp aligned to a 20-minute boundary."""
     minute = (slot_start // SLOT_SECONDS % 3) * 20
     draws = xorshift128(slot_start)
     d1, d2, _d3, _d4 = (next(draws) for _ in range(4))
@@ -103,69 +103,103 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     return gate.name, variant
 
 def discord_timestamp(unix_seconds: int) -> str:
-    # Discord renders this timestamp in each viewer's own local timezone.
+    # Discord displays this timestamp in each viewer's local timezone.
     return f"<t:{unix_seconds}:t>"
 
-def build_daily_message(day_start: datetime) -> str:
-    start = int(day_start.timestamp())
+def build_board(now: datetime) -> str:
+    now_ts = int(now.timestamp())
+    first_slot = ((now_ts // SLOT_SECONDS) + 1) * SLOT_SECONDS
     lines = [
-        "🐰 **FANTASY FLIRTS — DAILY GOLD SAUCER GATES**",
-        "**NEXT 24 HOURS**",
+        "🐰 **FANTASY FLIRTS — GOLD SAUCER GATE BOARD**",
+        f"**Next {GATES_TO_SHOW} GATEs · refreshed <t:{now_ts}:R>**",
         "",
-        "Times automatically display in *your* Discord local timezone.",
-        "GATEs are predicted from the current community-researched time seed.",
+        "Times display automatically in your own Discord local timezone.",
         "",
     ]
-    for hour in range(24):
-        entries = []
-        for minute in (0, 20, 40):
-            ts = start + hour * 3600 + minute * 60
-            gate, variant = predict_gate(ts)
-            emoji = EMOJI.get(gate, "🎟️")
-            extra = f" — {variant}" if variant else ""
-            entries.append(f"{discord_timestamp(ts)} {emoji} **{gate}**{extra}")
-        lines.append("  •  ".join(entries))
+    for index in range(GATES_TO_SHOW):
+        ts = first_slot + index * SLOT_SECONDS
+        gate, variant = predict_gate(ts)
+        emoji = EMOJI.get(gate, "🎟️")
+        extra = f" — {variant}" if variant else ""
+        lines.append(f"{discord_timestamp(ts)}  {emoji} **{gate}**{extra}")
     lines += [
         "",
         "🦘 Leap of Faith  ·  ✈️ Air Force One",
-        "_Predictions follow the current researched schedule; verify in-game if a patch changes GATE weights._",
+        "_GATE predictions use community-researched timing data; verify after game patches._",
     ]
     return "\n".join(lines)
 
+def github_headers(token: str) -> dict:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+def read_state(repo: str, token: str):
+    url = f"https://api.github.com/repos/{repo}/contents/state.json"
+    response = requests.get(url, headers=github_headers(token), timeout=20)
+    if response.status_code == 404:
+        return {}, None
+    response.raise_for_status()
+    payload = response.json()
+    content = base64.b64decode(payload["content"]).decode("utf-8")
+    return json.loads(content), payload["sha"]
+
+def write_state(repo: str, token: str, state: dict, sha: str | None):
+    url = f"https://api.github.com/repos/{repo}/contents/state.json"
+    content = base64.b64encode(
+        (json.dumps(state, indent=2) + "\n").encode("utf-8")
+    ).decode("ascii")
+    payload = {
+        "message": "Save Gold Saucer board message ID",
+        "content": content,
+        "branch": "main",
+    }
+    if sha:
+        payload["sha"] = sha
+    response = requests.put(url, headers=github_headers(token), json=payload, timeout=20)
+    response.raise_for_status()
+
 def main():
-    webhook = os.environ.get("DISCORD_WEBHOOK_URL")
-    if not webhook:
-        raise SystemExit("Missing DISCORD_WEBHOOK_URL environment variable.")
+    webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").rstrip("/")
+    token = os.environ.get("GITHUB_TOKEN")
+    repo = os.environ.get("GITHUB_REPOSITORY")
+    if not webhook or not token or not repo:
+        raise SystemExit("Missing DISCORD_WEBHOOK_URL, GITHUB_TOKEN, or GITHUB_REPOSITORY.")
 
-    # GitHub Actions runs this at 00:00 UTC. The GATE schedule itself is UTC-based.
-    now = datetime.now(timezone.utc)
-    day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    message = build_daily_message(day_start)
+    state, state_sha = read_state(repo, token)
+    message_id = state.get("message_id")
+    content = build_board(datetime.now(timezone.utc))
 
-    # Webhook content limit is 2000 chars; split safely into multiple posts if needed.
-    chunks, current = [], ""
-    for line in message.splitlines():
-        candidate = f"{current}\n{line}".strip() if current else line
-        if len(candidate) > 1950:
-            chunks.append(current)
-            current = line
+    if message_id:
+        edit_url = f"{webhook}/messages/{quote(str(message_id), safe='')}"
+        response = requests.patch(
+            edit_url,
+            json={"content": content, "allowed_mentions": {"parse": []}},
+            timeout=20,
+        )
+        if response.status_code == 404:
+            message_id = None
         else:
-            current = candidate
-    if current:
-        chunks.append(current)
+            response.raise_for_status()
+            print(f"Updated existing GATE board message {message_id}.")
+            return
 
-    for index, chunk in enumerate(chunks):
-        payload = {
-            "content": chunk,
+    # No saved message yet (or it was deleted): create one and remember its ID.
+    response = requests.post(
+        webhook + "?wait=true",
+        json={
+            "content": content,
             "username": "Fantasy Flirts GATE Guide",
             "allowed_mentions": {"parse": []},
-        }
-        response = requests.post(webhook, json=payload, timeout=20)
-        response.raise_for_status()
-        if index < len(chunks) - 1:
-            import time
-            time.sleep(1)
-    print(f"Posted {len(chunks)} schedule message(s) for {day_start.date()}.")
+        },
+        timeout=20,
+    )
+    response.raise_for_status()
+    message_id = response.json()["id"]
+    write_state(repo, token, {"message_id": message_id}, state_sha)
+    print(f"Created GATE board message {message_id}.")
 
 if __name__ == "__main__":
     main()
