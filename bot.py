@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import base64
 import json
-import math
 import os
 from datetime import datetime, timezone
 from urllib.parse import quote
@@ -104,10 +103,9 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     variant = weighted_pick(gate.variants, d2)[0] if gate.variants else None
     return gate.name, variant
 
-def minutes_until_refresh(now_ts: int) -> int:
-    """Minutes until the next even-hour UTC GitHub Actions schedule boundary."""
-    next_run = ((now_ts // REFRESH_INTERVAL_SECONDS) + 1) * REFRESH_INTERVAL_SECONDS
-    return max(1, math.ceil((next_run - now_ts) / 60))
+def next_refresh_timestamp(now_ts: int) -> int:
+    """Unix timestamp for the next even-hour UTC GitHub Actions schedule boundary."""
+    return ((now_ts // REFRESH_INTERVAL_SECONDS) + 1) * REFRESH_INTERVAL_SECONDS
 
 def build_embed(now: datetime) -> dict:
     now_ts = int(now.timestamp())
@@ -124,7 +122,7 @@ def build_embed(now: datetime) -> dict:
         # One compact line per GATE reduces visual clutter.
         lines.append(f"{time_text}  {emoji} **{gate}**  ·  {location}")
 
-    refresh_mins = minutes_until_refresh(now_ts)
+    next_refresh = next_refresh_timestamp(now_ts)
     description = (
         "**NEXT SIX GATES**  ·  Times shown in your local timezone\n\n"
         + "\n".join(lines)
@@ -138,7 +136,7 @@ def build_embed(now: datetime) -> dict:
         "description": description,
         "color": EMBED_BLUE,
         "footer": {
-            "text": f"💙 Flirtingway's  •  ⏱ Next refresh in approximately {refresh_mins} min"
+            "text": f"💙 Flirtingway's  •  ⏱ Next refresh <t:{next_refresh}:R>"
         },
     }
 
