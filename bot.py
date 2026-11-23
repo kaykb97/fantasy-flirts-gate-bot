@@ -6,7 +6,7 @@ https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
 The workflow checks every 15 minutes, but this script creates a NEW Discord
-message only when the saved two-hour deadline is due. Manual runs do not bypass
+message only when the saved three-hour clock deadline is due. Manual runs do not bypass
 the deadline unless FORCE_POST=true. The webhook's saved Discord name and avatar
 are used; this code intentionally does not override them.
 """
@@ -16,13 +16,16 @@ import base64
 import json
 
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 
 SLOT_SECONDS = 20 * 60
 GATES_TO_SHOW = 9
-REFRESH_INTERVAL_SECONDS = 2 * 60 * 60
+REFRESH_INTERVAL_SECONDS = 3 * 60 * 60
+SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
+SCHEDULE_VERSION = 1
 EMBED_BLUE = 0x287BFF
 
 AFO_CIELDALAES = (
@@ -105,14 +108,12 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     variant = weighted_pick(gate.variants, d2)[0] if gate.variants else None
     return gate.name, variant
 
-def next_refresh_timestamp(now_ts: int, previous_due: int | None = None) -> int:
-    """Next two-hour deadline, anchored to the last successful post."""
-    if previous_due is None:
-        return now_ts + REFRESH_INTERVAL_SECONDS
-    next_due = int(previous_due)
-    while next_due <= now_ts:
-        next_due += REFRESH_INTERVAL_SECONDS
-    return next_due
+def next_refresh_timestamp(now_ts: int) -> int:
+    """Next fixed 3-hour clock boundary in Eastern Time (00:00, 03:00, ...)."""
+    now_local = datetime.fromtimestamp(now_ts, SCHEDULE_TIMEZONE)
+    next_hour = ((now_local.hour // 3) + 1) * 3
+    boundary = now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=next_hour)
+    return int(boundary.timestamp())
 
 def build_embed(now: datetime) -> dict:
     now_ts = int(now.timestamp())
@@ -199,27 +200,34 @@ def main():
     state, state_sha = read_state(repo, token)
     previous_due = state.get("next_due_ts")
 
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
     force_post = os.environ.get("FORCE_POST", "").strip().lower() == "true"
-    first_setup = previous_due is None
+    next_boundary = next_refresh_timestamp(now_ts)
+    schedule_version = state.get("schedule_version", 0)
+    previous_due = state.get("next_due_ts")
 
-    # Scheduled checks run every 15 minutes but only create a Discord post
-    # once the persisted two-hour deadline has arrived.
-    due = first_setup or previous_due is None or now_ts >= int(previous_due)
-    if not due and not force_post:
-        due_text = datetime.fromtimestamp(int(previous_due), timezone.utc).isoformat()
-        print(f"Not due yet; skipping this check. Next post is scheduled for {due_text}.")
+    # Migrate the previous rolling three-hour schedule to fixed Eastern clock
+    # boundaries. Save the next boundary and wait; do not create a surprise post.
+    if schedule_version != SCHEDULE_VERSION or previous_due is None:
+        state.update({
+            "schedule_version": SCHEDULE_VERSION,
+            "next_due_ts": next_boundary,
+        })
+        write_state(repo, token, state, state_sha)
+        print(
+            "Initialized the fixed Eastern three-hour schedule. "
+            f"Next post is due at {datetime.fromtimestamp(next_boundary, SCHEDULE_TIMEZONE).isoformat()}."
+        )
         return
 
-    # Manual workflow runs are checks too; they only bypass the deadline when
-    # the user explicitly checks the Force post immediately option.
-    if force_post or first_setup:
-        next_due = now_ts + REFRESH_INTERVAL_SECONDS
-    else:
-        next_due = int(previous_due)
-        while next_due <= now_ts:
-            next_due += REFRESH_INTERVAL_SECONDS
+    due = now_ts >= int(previous_due)
+    if not due and not force_post:
+        due_text = datetime.fromtimestamp(int(previous_due), SCHEDULE_TIMEZONE).isoformat()
+        print(f"Not due yet; next post is scheduled for {due_text}.")
+        return
 
+    # Posts always point to the next fixed 3-hour Eastern clock boundary,
+    # regardless of small GitHub Actions scheduling delays or manual runs.
+    next_due = next_refresh_timestamp(now_ts)
     payload = {
         "content": f"⏱ **Next board refresh:** <t:{next_due}:R>",
         "embeds": [build_embed(now)],
@@ -236,6 +244,7 @@ def main():
         repo,
         token,
         {
+            "schedule_version": SCHEDULE_VERSION,
             "next_due_ts": next_due,
             "last_posted_ts": now_ts,
             "last_message_id": message_id,
