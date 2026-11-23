@@ -104,8 +104,12 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     return gate.name, variant
 
 def next_refresh_timestamp(now_ts: int) -> int:
-    """Unix timestamp for the next even-hour UTC GitHub Actions schedule boundary."""
-    return ((now_ts // REFRESH_INTERVAL_SECONDS) + 1) * REFRESH_INTERVAL_SECONDS
+    """Next scheduled run: minute 17 of every even UTC hour."""
+    interval = REFRESH_INTERVAL_SECONDS
+    next_run = (now_ts // interval) * interval + 17 * 60
+    if next_run <= now_ts:
+        next_run += interval
+    return next_run
 
 def build_embed(now: datetime) -> dict:
     now_ts = int(now.timestamp())
