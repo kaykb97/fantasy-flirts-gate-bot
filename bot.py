@@ -6,7 +6,7 @@ https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
 The workflow checks every 15 minutes, but this script creates a NEW Discord
-message only when the saved three-hour clock deadline is due. Manual runs do not bypass
+message only when the saved two-hour clock deadline is due. Manual runs do not bypass
 the deadline unless FORCE_POST=true. The webhook's saved Discord name and avatar
 are used; this code intentionally does not override them.
 """
@@ -23,9 +23,9 @@ import requests
 
 SLOT_SECONDS = 20 * 60
 GATES_TO_SHOW = 9
-REFRESH_INTERVAL_SECONDS = 3 * 60 * 60
+REFRESH_INTERVAL_SECONDS = 2 * 60 * 60
 SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
-SCHEDULE_VERSION = 1
+SCHEDULE_VERSION = 2
 EMBED_BLUE = 0x287BFF
 
 AFO_CIELDALAES = (
@@ -109,9 +109,9 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     return gate.name, variant
 
 def next_refresh_timestamp(now_ts: int) -> int:
-    """Next fixed 3-hour clock boundary in Eastern Time (00:00, 03:00, ...)."""
+    """Next fixed 2-hour clock boundary in Eastern Time (00:00, 02:00, ...)."""
     now_local = datetime.fromtimestamp(now_ts, SCHEDULE_TIMEZONE)
-    next_hour = ((now_local.hour // 3) + 1) * 3
+    next_hour = ((now_local.hour // 2) + 1) * 2
     boundary = now_local.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=next_hour)
     return int(boundary.timestamp())
 
@@ -205,7 +205,7 @@ def main():
     schedule_version = state.get("schedule_version", 0)
     previous_due = state.get("next_due_ts")
 
-    # Migrate the previous rolling three-hour schedule to fixed Eastern clock
+    # Migrate the previous rolling two-hour schedule to fixed Eastern clock
     # boundaries. Save the next boundary and wait; do not create a surprise post.
     if schedule_version != SCHEDULE_VERSION or previous_due is None:
         state.update({
@@ -225,7 +225,7 @@ def main():
         print(f"Not due yet; next post is scheduled for {due_text}.")
         return
 
-    # Posts always point to the next fixed 3-hour Eastern clock boundary,
+    # Posts always point to the next fixed 2-hour Eastern clock boundary,
     # regardless of small GitHub Actions scheduling delays or manual runs.
     next_due = next_refresh_timestamp(now_ts)
     payload = {
