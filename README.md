@@ -1,14 +1,14 @@
-# Fantasy Flirts — Daily GATE Bot
+# Fantasy Flirts — Rolling GATE Board
 
-Posts the **predicted actual Gold Saucer GATE** for every 20-minute slot (72 entries/day) into your Discord `#events` channel.
+Posts a rolling prediction board showing the **next nine GATEs** (three hours of coverage) in your Discord channel. GATE slots are spaced 20 minutes apart.
 
 ## Important timezone behavior
 
-The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`<t:...:t>`), so **each member sees the schedule times in their own Discord-local timezone**. The daily post is sent at **00:00 UTC** (7:00 PM Eastern during EST / 8:00 PM during EDT on the previous local date).
+The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`<t:...:t>`), so **each member sees the schedule times in their own Discord-local timezone**. The board is refreshed every **two hours**. Discord relative timestamps show each member the time remaining in their own local timezone.
 
 ## Free hosting: GitHub Actions + Discord webhook
 
-This version does not need a continuously running bot process or a paid host. GitHub Actions runs once per day and posts through a Discord webhook.
+This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 15 minutes, but the bot posts a new board only when its saved two-hour deadline is due.
 
 ### 1. Create a Discord webhook in #events
 
@@ -30,7 +30,7 @@ This version does not need a continuously running bot process or a paid host. Gi
 1. Open the repository's **Actions** tab.
 2. If prompted, enable workflows.
 3. Open **Daily GATE Schedule** and choose **Run workflow** to test immediately.
-4. It will then run automatically every day at 00:00 UTC.
+4. Scheduled checks continue every 15 minutes; actual board posts follow the saved two-hour deadline.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
 
@@ -55,6 +55,6 @@ This posts immediately. Do not paste your real webhook URL into chat, source cod
 ## Files
 
 - `bot.py` — prediction algorithm and Discord posting
-- `.github/workflows/daily.yml` — free daily scheduled runner
+- `.github/workflows/daily.yml` — scheduled 15-minute deadline checks
 - `requirements.txt` — HTTP dependency
 - `ATTRIBUTION.md` — upstream project credit/license note
