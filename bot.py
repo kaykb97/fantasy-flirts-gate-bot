@@ -5,8 +5,10 @@ Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
-Every workflow run edits the same Discord webhook message. The webhook's saved
-Discord name and avatar are used; this code intentionally does not override them.
+The workflow checks every 15 minutes, but this script creates a NEW Discord
+message only when the saved two-hour deadline is due. Manual runs do not bypass
+the deadline unless FORCE_POST=true. The webhook's saved Discord name and avatar
+are used; this code intentionally does not override them.
 """
 from __future__ import annotations
 
@@ -179,11 +181,45 @@ def write_state(repo: str, token: str, state: dict, sha: str | None):
     response = requests.put(url, headers=github_headers(token), json=payload, timeout=20)
     response.raise_for_status()
 
+def github_headers(token: str) -> dict:
+    return {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+def read_state(repo: str, token: str):
+    url = f"https://api.github.com/repos/{repo}/contents/state.json"
+    response = requests.get(url, headers=github_headers(token), timeout=20)
+    if response.status_code == 404:
+        return {}, None
+    response.raise_for_status()
+    saved = response.json()
+    try:
+        raw = base64.b64decode(saved["content"]).decode("utf-8")
+        return json.loads(raw), saved["sha"]
+    except (KeyError, ValueError, json.JSONDecodeError):
+        return {}, saved.get("sha")
+
+def write_state(repo: str, token: str, state: dict, sha: str | None):
+    url = f"https://api.github.com/repos/{repo}/contents/state.json"
+    encoded = base64.b64encode(
+        (json.dumps(state, indent=2) + "\\n").encode("utf-8")
+    ).decode("ascii")
+    payload = {
+        "message": "Save Flirtingway GATE posting schedule",
+        "content": encoded,
+        "branch": "main",
+    }
+    if sha:
+        payload["sha"] = sha
+    response = requests.put(url, headers=github_headers(token), json=payload, timeout=20)
+    response.raise_for_status()
+
 def main():
     webhook = os.environ.get("DISCORD_WEBHOOK_URL", "").rstrip("/")
     token = os.environ.get("GITHUB_TOKEN")
     repo = os.environ.get("GITHUB_REPOSITORY")
-    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
     if not webhook or not token or not repo:
         raise SystemExit("Missing DISCORD_WEBHOOK_URL, GITHUB_TOKEN, or GITHUB_REPOSITORY.")
 
@@ -192,32 +228,39 @@ def main():
     state, state_sha = read_state(repo, token)
     previous_due = state.get("next_due_ts")
 
-    manual_run = event_name == "workflow_dispatch"
-    first_run = previous_due is None
+    event_name = os.environ.get("GITHUB_EVENT_NAME", "")
+    force_post = os.environ.get("FORCE_POST", "").strip().lower() == "true"
+    first_setup = previous_due is None
 
-    # Manual tests and first setup post immediately. Scheduled checks only
-    # create a post when the stored two-hour deadline has passed.
-    if not manual_run and not first_run and now_ts < int(previous_due):
+    # Scheduled checks run every 15 minutes but only create a Discord post
+    # once the persisted two-hour deadline has arrived.
+    due = first_setup or previous_due is None or now_ts >= int(previous_due)
+    if not due and not force_post:
         due_text = datetime.fromtimestamp(int(previous_due), timezone.utc).isoformat()
-        print(f"Not due yet; next post is scheduled for {due_text}.")
+        print(f"Not due yet; skipping this check. Next post is scheduled for {due_text}.")
         return
 
-    next_due = next_refresh_timestamp(
-        now_ts,
-        previous_due if previous_due is not None and not manual_run else None,
-    )
+    # Manual workflow runs are checks too; they only bypass the deadline when
+    # the user explicitly checks the Force post immediately option.
+    if force_post or first_setup:
+        next_due = now_ts + REFRESH_INTERVAL_SECONDS
+    else:
+        next_due = int(previous_due)
+        while next_due <= now_ts:
+            next_due += REFRESH_INTERVAL_SECONDS
+
     payload = {
         "content": f"⏱ **Next board refresh:** <t:{next_due}:R>",
         "embeds": [build_embed(now)],
         "allowed_mentions": {"parse": []},
     }
 
-    # Create a NEW Discord post; previous messages are left untouched.
+    # Each due cycle creates one NEW message. Prior posts remain in the channel.
     response = requests.post(webhook + "?wait=true", json=payload, timeout=20)
     response.raise_for_status()
     message_id = response.json().get("id")
 
-    # Save the next deadline only after Discord confirms the new post.
+    # Save the next deadline only after Discord confirms the post succeeded.
     write_state(
         repo,
         token,
@@ -232,10 +275,6 @@ def main():
         f"Posted a new GATE board message ({message_id}). "
         f"Next due: {datetime.fromtimestamp(next_due, timezone.utc).isoformat()}."
     )
-
-if __name__ == "__main__":
-    main()
-
 
 if __name__ == "__main__":
     main()
