@@ -7,5 +7,5 @@ keep_vars = true
 [[d1_databases]]
 binding = "DB"
 database_name = "flirtingway-gate-alerts"
-database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+database_id = "feeb4fc0-412c-471a-a807-b026780ee3af"
 migrations_dir = "./migrations"
