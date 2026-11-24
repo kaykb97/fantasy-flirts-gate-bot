@@ -8,7 +8,7 @@ The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`
 
 ## Free hosting: GitHub Actions + Discord webhook
 
-This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 15 minutes, but the bot posts a new board only when its saved 15-minute Eastern clock deadline is due.
+This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 5 minutes. The public board posts every 15 minutes; private GATE DM subscriptions are checked every 5 minutes.
 
 ### 1. Create a Discord webhook in #events
 
@@ -30,7 +30,7 @@ This version does not need a continuously running bot process or a paid host. Gi
 1. Open the repository's **Actions** tab.
 2. If prompted, enable workflows.
 3. Open **Flirtingway GATE Scheduler** and choose **Run workflow** to run a check. To post immediately, select **Force post immediately**.
-4. Scheduled checks continue every 15 minutes; actual board posts follow the fixed 15-minute Eastern clock schedule.
+4. Scheduled checks continue every 5 minutes. The public board follows its fixed 15-minute Eastern clock schedule, while private GATE DM alerts are checked every 5 minutes.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
 
@@ -74,12 +74,12 @@ python -m pip install -r requirements.txt
 DISCORD_WEBHOOK_URL="your-webhook-url" python bot.py
 ```
 
-A local run follows the same fixed 15-minute Eastern clock schedule unless `FORCE_POST=true` is set. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
+A local run follows the saved board schedule unless `FORCE_POST=true` is set. DM notifications are checked on each scheduled run when the Worker URL and secret are configured. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
 
 ## Files
 
 - `bot.py` — prediction algorithm, nine-gate board, and fixed 15-minute Eastern posting schedule
-- `.github/workflows/daily.yml` — 15-minute board schedule and DM notification trigger
+- `.github/workflows/daily.yml` — 5-minute DM checks and a 15-minute board schedule
 - `worker/` — Discord slash-command endpoint, DM delivery, and D1 subscription database
 - `requirements.txt` — HTTP dependency
 - `ATTRIBUTION.md` — upstream project credit/license note
