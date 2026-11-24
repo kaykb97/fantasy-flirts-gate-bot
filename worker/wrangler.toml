@@ -2,6 +2,7 @@ name = "flirtingway-gate-alerts"
 main = "src/index.js"
 compatibility_date = "2026-11-23"
 workers_dev = true
+keep_vars = true
 
 [[d1_databases]]
 binding = "DB"
