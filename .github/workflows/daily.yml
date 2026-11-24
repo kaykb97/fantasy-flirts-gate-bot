@@ -9,8 +9,8 @@ on:
         type: boolean
         default: false
   schedule:
-    # Run at each quarter-hour; bot.py posts at each 15-minute Eastern clock boundary.
-    - cron: "0,15,30,45 * * * *"
+    # Check GATE DM subscriptions every 5 minutes; board posts remain on 15-minute boundaries.
+    - cron: "*/5 * * * *"
 
 permissions:
   contents: write
