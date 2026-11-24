@@ -43,19 +43,22 @@ async function discordRequest(env, path, method = "GET", data) {
 }
 async function registerGuildCommand(env) {
   if (!env.DISCORD_BOT_TOKEN || !env.DISCORD_APPLICATION_ID || !env.DISCORD_GUILD_ID) {
-    console.log("Set bot token, application ID, and guild ID before verifying the interaction URL.");
-    return;
+    throw new Error("Missing DISCORD_BOT_TOKEN, DISCORD_APPLICATION_ID, or DISCORD_GUILD_ID Worker settings.");
   }
-  try {
-    await discordRequest(env, "/applications/" + env.DISCORD_APPLICATION_ID + "/guilds/" + env.DISCORD_GUILD_ID + "/commands", "POST", {
-      name: "gatealerts",
-      description: "Choose which GATEs you want private alerts for",
-      type: 1,
-    });
-    console.log("Registered /gatealerts in the configured server.");
-  } catch (error) {
-    console.error("Slash command registration failed:", String(error));
-  }
+  const commands = [{
+    name: "gatealerts",
+    description: "Choose which GATEs you want private alerts for",
+    type: 1,
+  }];
+  // Bulk overwrite is idempotent: rerunning deployment won't create duplicates.
+  await discordRequest(
+    env,
+    "/applications/" + env.DISCORD_APPLICATION_ID + "/guilds/" + env.DISCORD_GUILD_ID + "/commands",
+    "PUT",
+    commands,
+  );
+  console.log("Registered /gatealerts in the configured server.");
+  return { ok: true, command: "gatealerts" };
 }
 async function getSubscription(env, userId) {
   return env.DB.prepare("SELECT user_id, events_json, paused FROM subscriptions WHERE user_id = ?").bind(userId).first();
@@ -201,6 +204,17 @@ export default {
     if (request.method === "GET" && url.pathname === "/health") return json({ ok: true, service: "Flirtingway GATE DM alerts" });
     if (request.method === "POST" && url.pathname === "/interactions") return handleDiscordRequest(request, env, ctx);
     if (request.method === "POST" && url.pathname === "/notify") return notifySubscribers(request, env);
+    if (request.method === "POST" && url.pathname === "/register") {
+      if (!env.SCHEDULER_SECRET || !constantTimeEqual(request.headers.get("authorization") || "", "Bearer " + env.SCHEDULER_SECRET)) {
+        return json({ error: "Unauthorized." }, 401);
+      }
+      try {
+        return json(await registerGuildCommand(env));
+      } catch (error) {
+        console.error("Explicit slash command registration failed:", String(error));
+        return json({ error: String(error) }, 502);
+      }
+    }
     return json({ error: "Not found." }, 404);
   },
 };
