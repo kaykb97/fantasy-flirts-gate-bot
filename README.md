@@ -8,7 +8,7 @@ The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`
 
 ## Free hosting: GitHub Actions + Discord webhook
 
-This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 5 minutes, but the bot posts a new board only when its saved 15-minute Eastern clock deadline is due.
+This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 15 minutes, but the bot posts a new board only when its saved 15-minute Eastern clock deadline is due.
 
 ### 1. Create a Discord webhook in #events
 
@@ -33,6 +33,36 @@ This version does not need a continuously running bot process or a paid host. Gi
 4. Scheduled checks continue every 5 minutes; actual board posts follow the fixed 15-minute Eastern clock schedule.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
+
+## Opt-in GATE event alerts
+
+Members can subscribe to individual GATEs using Discord roles. When a subscribed GATE is due within the next 15 minutes, the board mentions only that event's opt-in role. Each GATE slot is alerted at most once.
+
+Create these roles in your Discord server:
+
+- `GATE Alert • Air Force One`
+- `GATE Alert • Cliffhanger`
+- `GATE Alert • Leap of Faith`
+- `GATE Alert • Any Way the Wind Blows`
+- `GATE Alert • The Slice Is Right`
+
+Let members assign multiple roles through **Server Settings → Onboarding** by creating an optional question such as “Which GATEs do you want alerts for?” and assigning one role to each answer. Enable multiple answers and leave “Ask members before join” off so existing members can change their choices later in **Channels & Roles**. Discord's setup guide: https://support.discord.com/hc/en-us/articles/11074987197975-Community-Onboarding-FAQ
+
+If you do not use Community Onboarding, use your preferred role-menu bot to let members add/remove these roles. Make sure the alert roles can be mentioned by the webhook (for example, enable “Allow anyone to @mention this role” on each alert role).
+
+Then add a repository secret named `GATE_ALERT_ROLE_IDS` under **Settings → Secrets and variables → Actions**. Its value should be a JSON object mapping each event name to that role's numeric Discord ID:
+
+```json
+{
+  "Air Force One": "ROLE_ID_FOR_AIR_FORCE_ONE",
+  "Cliffhanger": "ROLE_ID_FOR_CLIFFHANGER",
+  "Leap of Faith": "ROLE_ID_FOR_LEAP_OF_FAITH",
+  "Any Way the Wind Blows": "ROLE_ID_FOR_ANY_WAY_THE_WIND_BLOWS",
+  "The Slice Is Right": "ROLE_ID_FOR_THE_SLICE_IS_RIGHT"
+}
+```
+
+Replace every placeholder with the matching role ID. To copy an ID, enable Discord Developer Mode, right-click (or long-press) the role in Server Settings → Roles, and choose **Copy Role ID**. Leave an event out of the JSON until its role is ready. If the secret is missing or empty, the normal GATE board continues without event pings.
 
 ## Prediction algorithm and patch updates
 
