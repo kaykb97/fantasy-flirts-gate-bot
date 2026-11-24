@@ -30,7 +30,7 @@ This version does not need a continuously running bot process or a paid host. Gi
 1. Open the repository's **Actions** tab.
 2. If prompted, enable workflows.
 3. Open **Flirtingway GATE Scheduler** and choose **Run workflow** to run a check. To post immediately, select **Force post immediately**.
-4. Scheduled checks continue every 5 minutes; actual board posts follow the fixed 15-minute Eastern clock schedule.
+4. Scheduled checks continue every 15 minutes; actual board posts follow the fixed 15-minute Eastern clock schedule.
 
 GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
 
@@ -62,7 +62,7 @@ Then add a repository secret named `GATE_ALERT_ROLE_IDS` under **Settings → Se
 }
 ```
 
-Replace every placeholder with the matching role ID. To copy an ID, enable Discord Developer Mode, right-click (or long-press) the role in Server Settings → Roles, and choose **Copy Role ID**. Leave an event out of the JSON until its role is ready. If the secret is missing or empty, the normal GATE board continues without event pings.
+Replace every placeholder with the matching role ID. To copy an ID, enable Discord Developer Mode, enable Developer Mode in **User Settings → Advanced**, then copy the role's ID from its context menu. Discord's ID guide: https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID Leave an event out of the JSON until its role is ready. If the secret is missing or empty, the normal GATE board continues without event pings.
 
 ## Prediction algorithm and patch updates
 
