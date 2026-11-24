@@ -62,7 +62,7 @@ Then add a repository secret named `GATE_ALERT_ROLE_IDS` under **Settings → Se
 }
 ```
 
-Replace every placeholder with the matching role ID. To copy an ID, enable Discord Developer Mode, enable Developer Mode in **User Settings → Advanced**, then copy the role's ID from its context menu. Discord's ID guide: https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID Leave an event out of the JSON until its role is ready. If the secret is missing or empty, the normal GATE board continues without event pings.
+Replace every placeholder with the matching role ID. To copy an ID, enable Developer Mode in **User Settings → Advanced**, then right-click the role (or its mention) and choose **Copy ID**. Discord's ID guide: https://support.discord.com/hc/en-us/articles/206346498-Where-can-I-find-my-User-Server-Message-ID. Leave an event out of the JSON until its role is ready. If the secret is missing or empty, the normal GATE board continues without event pings.
 
 ## Prediction algorithm and patch updates
 
