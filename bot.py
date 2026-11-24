@@ -88,12 +88,10 @@ def build_gate_notification(now_ts: int) -> dict | None:
     next_slot = current_slot + SLOT_SECONDS
     seconds_until_next = next_slot - now_ts
 
-    if seconds_until_next <= REFRESH_INTERVAL_SECONDS:
-        slot_ts = next_slot
-    elif now_ts - current_slot <= REFRESH_INTERVAL_SECONDS:
-        slot_ts = current_slot
-    else:
+    # Only alert ahead of a GATE, never after it has already started.
+    if seconds_until_next > REFRESH_INTERVAL_SECONDS:
         return None
+    slot_ts = next_slot
 
     event_name, variant = predict_gate(slot_ts)
     return {
