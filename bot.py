@@ -289,7 +289,7 @@ def main():
     content = f"⏱ **Next board refresh:** <t:{next_due}:R>"
     allowed_role_ids = []
     if event_alert:
-        content += "\\n\\n" + event_alert["content"]
+        content += "\n\n" + event_alert["content"]
         allowed_role_ids = [event_alert["role_id"]]
         print(
             f"Adding opt-in alert for {event_alert['event_name']} "
@@ -299,7 +299,7 @@ def main():
     payload = {
         "content": content,
         "embeds": [build_embed(now)],
-        "allowed_mentions": {"parse": [], "roles": allowed_role_ids},
+        "allowed_mentions": ({"roles": allowed_role_ids} if allowed_role_ids else {"parse": []}),
     }
 
     # Each due cycle creates one NEW message. Prior posts remain in the channel.
