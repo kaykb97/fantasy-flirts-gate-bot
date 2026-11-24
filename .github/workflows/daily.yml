@@ -41,4 +41,5 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           FORCE_POST: ${{ inputs.force_post }}
+          GATE_ALERT_ROLE_IDS: ${{ secrets.GATE_ALERT_ROLE_IDS }}
         run: python bot.py
