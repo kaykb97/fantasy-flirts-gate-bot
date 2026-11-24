@@ -46,7 +46,7 @@ The DM feature runs as a Cloudflare Worker with a D1 database. The existing GitH
 2. **Invite the bot to the server.** In OAuth2 → URL Generator, select the `bot` and `applications.commands` scopes. A zero-permission bot invite is sufficient; the Worker responds to slash commands and sends DMs through the Discord API.
 3. **Create a Cloudflare D1 database** named `flirtingway-gate-alerts`. Copy its Database ID and your Cloudflare Account ID.
 4. **Set the D1 ID in `worker/wrangler.toml`.** Replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` with the database ID. Commit that change.
-5. **Create a Cloudflare API token** with permission to edit Workers Scripts and D1 databases for this account. Add these GitHub repository Actions secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
+5. **Create a Cloudflare API token** with permission to edit the `flirtingway-gate-alerts` Worker and the `flirtingway-gate-alerts` D1 database. Add the token as a GitHub repository Actions secret named `CLOUDFLARE_API_TOKEN`. The account ID is already set in the deployment workflow; it is an identifier, not a secret.
 6. **Deploy the Worker.** In GitHub → Actions, run **Deploy Flirtingway DM Alerts Worker**. This applies the D1 migration and deploys the Worker. Its URL will look like `https://flirtingway-gate-alerts.<your-subdomain>.workers.dev`.
 7. **Add Worker settings** in Cloudflare → Workers & Pages → flirtingway-gate-alerts → Settings → Variables and Secrets:
    - Variables: `DISCORD_PUBLIC_KEY`, `DISCORD_APPLICATION_ID`, and `DISCORD_GUILD_ID`.
