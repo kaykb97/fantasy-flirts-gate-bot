@@ -273,8 +273,11 @@ def main():
 
     due = now_ts >= int(previous_due)
     if not due and not force_post:
+        # Check private GATE subscriptions on every five-minute workflow run,
+        # independently of whether a new public board post is due.
+        send_gate_dm_notifications(now_ts)
         due_text = datetime.fromtimestamp(int(previous_due), SCHEDULE_TIMEZONE).isoformat()
-        print(f"Not due yet; next post is scheduled for {due_text}.")
+        print(f"Board not due yet; next post is scheduled for {due_text}.")
         return
 
     # Posts always point to the next fixed 15-minute Eastern clock boundary,
