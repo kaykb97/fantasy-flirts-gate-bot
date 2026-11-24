@@ -38,3 +38,14 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 5077ce842048bd36ba915d4105603177
         run: wrangler deploy
+
+      - name: Register Discord server command
+        env:
+          GATE_ALERTS_WORKER_URL: ${{ secrets.GATE_ALERTS_WORKER_URL }}
+          GATE_ALERTS_WORKER_SECRET: ${{ secrets.GATE_ALERTS_WORKER_SECRET }}
+        run: |
+          test -n "$GATE_ALERTS_WORKER_URL"
+          test -n "$GATE_ALERTS_WORKER_SECRET"
+          curl --fail-with-body --silent --show-error \
+            -X POST "$GATE_ALERTS_WORKER_URL/register" \
+            -H "Authorization: Bearer $GATE_ALERTS_WORKER_SECRET"
