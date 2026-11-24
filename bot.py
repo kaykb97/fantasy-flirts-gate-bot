@@ -5,9 +5,9 @@ Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
-The workflow checks every 5 minutes, but this script creates a NEW Discord
+The workflow checks every 15 minutes, but this script creates a NEW Discord
 message only when the saved 15-minute clock deadline is due. Manual runs do not bypass
-the deadline unless FORCE_POST=true. The webhook's saved Discord name and avatar
+the deadline unless FORCE_POST=true. Event-specific role pings are optional and configured with GATE_ALERT_ROLE_IDS. The webhook's saved Discord name and avatar
 are used; this code intentionally does not override them.
 """
 from __future__ import annotations
@@ -80,6 +80,63 @@ EMOJI = {
     "Any Way the Wind Blows": "🌪️",
     "The Slice Is Right": "🍕",
 }
+
+
+def load_alert_role_ids() -> dict[str, str]:
+    """Load event-to-role mappings from the optional GitHub Actions secret."""
+    raw = os.environ.get("GATE_ALERT_ROLE_IDS", "").strip()
+    if not raw:
+        return {}
+    try:
+        configured = json.loads(raw)
+    except json.JSONDecodeError:
+        print("GATE_ALERT_ROLE_IDS is not valid JSON; opt-in event alerts are disabled.")
+        return {}
+    if not isinstance(configured, dict):
+        print("GATE_ALERT_ROLE_IDS must be a JSON object; opt-in event alerts are disabled.")
+        return {}
+
+    role_ids = {}
+    for event_name, role_id in configured.items():
+        value = str(role_id).strip()
+        if event_name in EMOJI and value.isdigit():
+            role_ids[event_name] = value
+    return role_ids
+
+
+def build_event_alert(now_ts: int, role_ids: dict[str, str], state: dict):
+    """Return one opt-in role ping for a GATE starting within the next 15 minutes."""
+    current_slot = (now_ts // SLOT_SECONDS) * SLOT_SECONDS
+    next_slot = current_slot + SLOT_SECONDS
+    seconds_until_next = next_slot - now_ts
+
+    # Normal case: alert before the next GATE. If a scheduled check starts
+    # just after a slot boundary, allow a late alert for that current slot.
+    if seconds_until_next <= REFRESH_INTERVAL_SECONDS:
+        slot_ts = next_slot
+    elif now_ts - current_slot <= REFRESH_INTERVAL_SECONDS:
+        slot_ts = current_slot
+    else:
+        return None
+
+    if state.get("last_notified_gate_slot_ts") == slot_ts:
+        return None
+
+    event_name, _variant = predict_gate(slot_ts)
+    role_id = role_ids.get(event_name)
+    if not role_id:
+        return None
+
+    alert_text = (
+        f"<@&{role_id}> {EMOJI.get(event_name, '🎟️')} **{event_name}** "
+        f"starts <t:{slot_ts}:R>!"
+    )
+    return {
+        "content": alert_text,
+        "role_id": role_id,
+        "slot_ts": slot_ts,
+        "event_name": event_name,
+    }
 
 def xorshift128(seed: int):
     x, y, z, w = seed & 0xFFFFFFFF, 0, 0, 0
@@ -227,10 +284,22 @@ def main():
     # Posts always point to the next fixed 15-minute Eastern clock boundary,
     # regardless of small GitHub Actions scheduling delays or manual runs.
     next_due = next_refresh_timestamp(now_ts)
+    role_ids = load_alert_role_ids()
+    event_alert = build_event_alert(now_ts, role_ids, state)
+    content = f"⏱ **Next board refresh:** <t:{next_due}:R>"
+    allowed_role_ids = []
+    if event_alert:
+        content += "\\n\\n" + event_alert["content"]
+        allowed_role_ids = [event_alert["role_id"]]
+        print(
+            f"Adding opt-in alert for {event_alert['event_name']} "
+            f"at {datetime.fromtimestamp(event_alert['slot_ts'], SCHEDULE_TIMEZONE).isoformat()}."
+        )
+
     payload = {
-        "content": f"⏱ **Next board refresh:** <t:{next_due}:R>",
+        "content": content,
         "embeds": [build_embed(now)],
-        "allowed_mentions": {"parse": []},
+        "allowed_mentions": {"parse": [], "roles": allowed_role_ids},
     }
 
     # Each due cycle creates one NEW message. Prior posts remain in the channel.
@@ -247,6 +316,9 @@ def main():
             "next_due_ts": next_due,
             "last_posted_ts": now_ts,
             "last_message_id": message_id,
+            "last_notified_gate_slot_ts": (
+                event_alert["slot_ts"] if event_alert else state.get("last_notified_gate_slot_ts")
+            ),
         },
         state_sha,
     )
