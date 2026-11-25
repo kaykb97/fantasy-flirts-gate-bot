@@ -235,10 +235,15 @@ def write_state(repo: str, token: str, state: dict, sha: str | None):
     encoded = base64.b64encode(
         (json.dumps(state, indent=2) + "\n").encode("utf-8")
     ).decode("ascii")
+    state_branch = (
+        os.environ.get("GATE_STATE_BRANCH")
+        or os.environ.get("GITHUB_REF_NAME")
+        or "main"
+    )
     payload = {
         "message": "Save Flirtingway GATE posting schedule",
         "content": encoded,
-        "branch": "main",
+        "branch": state_branch,
     }
     if sha:
         payload["sha"] = sha
