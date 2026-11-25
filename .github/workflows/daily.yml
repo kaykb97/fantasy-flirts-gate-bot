@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       force_post:
-        description: "Post immediately instead of waiting for the next 15-minute Eastern clock time"
+        description: "Post immediately instead of waiting for the next two-hour Eastern clock time"
         required: false
         type: boolean
         default: false
   schedule:
-    # Check GATE DM subscriptions every 5 minutes; board posts remain on 15-minute boundaries.
+    # Check GATE DM subscriptions every 5 minutes; public board refreshes every two hours.
     - cron: "*/5 * * * *"
 
 permissions:
@@ -37,7 +37,7 @@ jobs:
       - name: Check Python syntax
         run: python -m py_compile bot.py
 
-      - name: Check whether the next 15-minute Eastern board post is due
+      - name: Check whether the next two-hour Eastern board post is due
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
