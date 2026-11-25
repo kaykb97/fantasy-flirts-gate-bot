@@ -18,6 +18,7 @@ import json
 import os
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+from urllib.parse import quote
 
 import requests
 
@@ -212,7 +213,15 @@ def github_headers(token: str) -> dict:
     }
 
 def read_state(repo: str, token: str):
-    url = f"https://api.github.com/repos/{repo}/contents/state.json"
+    state_branch = (
+        os.environ.get("GATE_STATE_BRANCH")
+        or os.environ.get("GITHUB_REF_NAME")
+        or "main"
+    )
+    url = (
+        f"https://api.github.com/repos/{repo}/contents/state.json"
+        f"?ref={quote(state_branch, safe="")}"
+    )
     response = requests.get(url, headers=github_headers(token), timeout=20)
     if response.status_code == 404:
         return {}, None
