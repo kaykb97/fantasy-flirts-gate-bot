@@ -46,4 +46,5 @@ jobs:
           FORCE_POST: ${{ inputs.force_post }}
           GATE_ALERTS_WORKER_URL: ${{ secrets.GATE_ALERTS_WORKER_URL }}
           GATE_ALERTS_WORKER_SECRET: ${{ secrets.GATE_ALERTS_WORKER_SECRET }}
+          GATE_STATE_BRANCH: ${{ github.ref_name }}
         run: python bot.py
