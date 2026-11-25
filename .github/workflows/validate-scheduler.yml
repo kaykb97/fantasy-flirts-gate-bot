@@ -7,6 +7,9 @@ on:
       - "bot.py"
       - "tests/**"
       - ".github/workflows/validate-scheduler.yml"
+      - ".github/workflows/daily.yml"
+      - ".github/workflows/register-gate-board-and-treasure-once.yml"
+      - "README.md"
   workflow_dispatch:
 
 permissions:
