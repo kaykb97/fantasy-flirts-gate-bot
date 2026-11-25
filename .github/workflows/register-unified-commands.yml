@@ -1,0 +1,32 @@
+name: Register Flirtingway Help Commands
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Register /housing and /gatealerts on the unified Worker
+        env:
+          WORKER_URL: https://flirtingway-help.kalynkb97.workers.dev
+          SCHEDULER_SECRET: ${{ secrets.GATE_ALERTS_WORKER_SECRET }}
+        run: |
+          set -euo pipefail
+          for endpoint in register-housing register-gate; do
+            response_file=$(mktemp)
+            status=$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+              --request POST "$WORKER_URL/$endpoint" \
+              --header "Authorization: Bearer $SCHEDULER_SECRET")
+            echo "$endpoint returned HTTP $status"
+            cat "$response_file"
+            rm -f "$response_file"
+            if [ "$status" != "200" ]; then
+              echo "Registration failed at $endpoint"
+              exit 1
+            fi
+          done
+          echo "Both slash-command registration requests completed successfully."
