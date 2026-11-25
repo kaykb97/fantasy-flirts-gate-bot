@@ -9,7 +9,7 @@ on:
         type: boolean
         default: false
   schedule:
-    # Check GATE DM subscriptions every 5 minutes; public board refreshes every two hours.
+    # Check the public-board deadline; Cloudflare independently schedules private DMs.
     - cron: "*/5 * * * *"
 
 permissions:
