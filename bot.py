@@ -5,10 +5,12 @@ Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
-The workflow checks every 5 minutes for private GATE DMs, while the public board
-refreshes every 120 minutes. Each refresh posts the replacement board and removes
-the previous board message when possible. Manual runs do not bypass the deadline unless FORCE_POST=true. Optional private GATE DMs are handled by the Cloudflare Worker when configured. The webhook's saved Discord name and avatar
-are used; this code intentionally does not override them.
+The GitHub workflow publishes the public board on a 120-minute cadence. Private
+GATE DMs are scheduled independently by the unified Flirtingway Help Cloudflare
+Worker every 5 minutes, using the shared D1 subscriptions table. Each board refresh
+posts the replacement board and removes the previous board message when possible.
+Manual runs do not bypass the board deadline unless FORCE_POST=true. The webhook's
+saved Discord name and avatar are used; this code intentionally does not override them.
 """
 from __future__ import annotations
 
@@ -100,39 +102,6 @@ def build_gate_notification(now_ts: int) -> dict | None:
         "event_name": event_name,
         "variant": variant,
     }
-
-
-def send_gate_dm_notifications(now_ts: int) -> None:
-    """Ask the Cloudflare Worker to DM members subscribed to this upcoming GATE."""
-    worker_url = os.environ.get("GATE_ALERTS_WORKER_URL", "").rstrip("/")
-    worker_secret = os.environ.get("GATE_ALERTS_WORKER_SECRET", "")
-    if not worker_url or not worker_secret:
-        print("DM alerts are not configured yet; skipping private notifications.")
-        return
-
-    alert = build_gate_notification(now_ts)
-    if not alert:
-        print("No GATE falls inside the current DM alert window.")
-        return
-
-    try:
-        response = requests.post(
-            worker_url + "/notify",
-            headers={"Authorization": f"Bearer {worker_secret}"},
-            json=alert,
-            timeout=30,
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(
-            "Private GATE alerts processed: "
-            f"{result.get('sent', 0)} sent, "
-            f"{result.get('failed', 0)} failed, "
-            f"{result.get('already_sent', 0)} already sent."
-        )
-    except (requests.RequestException, ValueError) as error:
-        # Do not skip saving the board schedule if the optional DM service is unavailable.
-        print(f"Private GATE notification service failed: {error}")
 
 
 def xorshift128(seed: int):
@@ -292,9 +261,7 @@ def main():
 
     due = now_ts >= int(previous_due)
     if not due and not force_post:
-        # Check private GATE subscriptions on every five-minute workflow run,
-        # independently of whether a new public board post is due.
-        send_gate_dm_notifications(now_ts)
+        # Private GATE DMs are handled by the Flirtingway Help Cloudflare cron.
         due_text = datetime.fromtimestamp(int(previous_due), SCHEDULE_TIMEZONE).isoformat()
         print(f"Board not due yet; next post is scheduled for {due_text}.")
         return
@@ -325,10 +292,7 @@ def main():
         except requests.RequestException as error:
             print(f"Could not remove previous GATE board message ({previous_message_id}): {error}")
 
-    # Manual force-posts are for board testing and never DM subscribers.
-    if not force_post:
-        send_gate_dm_notifications(now_ts)
-
+    # Private GATE notifications run independently from this public-board workflow.
     # Save the next deadline only after Discord confirms the post succeeded.
     write_state(
         repo,
