@@ -25,14 +25,16 @@ Manual **Force post immediately** is a deliberate board-post test: it posts to t
 
 ## Unified Worker integration
 
-The slash-command and DM service is now being consolidated into the separate `Flirtingway Help` Cloudflare Worker in the `kaykb97/fantasy-flirts-housing-bot` repository. That Worker:
+The slash-command and DM service runs in the unified `Flirtingway Help` Cloudflare Worker in the `kaykb97/fantasy-flirts-housing-bot` repository. That Worker:
 
 - serves both `/housing` and `/gatealerts` through the new Discord application's `/interactions` endpoint;
 - uses the existing `flirtingway-gate-alerts` D1 database and its `subscriptions` and `deliveries` tables without recreating or migrating them;
 - keeps Housing searches on-demand only;
-- authenticates `/notify` and the two internal command-registration endpoints with `SCHEDULER_SECRET`.
+- authenticates the backward-compatible `/notify` endpoint and internal command-registration endpoints with `SCHEDULER_SECRET`;
+- runs a native Cloudflare Cron Trigger every five minutes to predict the next GATE and deliver private alerts directly from Flirtingway Help;
+- retries failed delivery records on subsequent cron checks and recovers pending claims older than 10 minutes, while deduplicating each subscriber/slot in D1.
 
-The unified Worker has its own Wrangler configuration at `worker/wrangler.toml`. Its deployment is manual-only while the consolidation is being tested. The original Housing and GATE Workers remain available for rollback; do not disable them until the new bot has passed testing and cutover is explicitly approved.
+The unified Worker has its own Wrangler configuration at `worker/wrangler.toml`, including the five-minute cron trigger. Its deployment is manual-only. The original Housing and GATE Workers remain available as rollback services; they are no longer part of the active DM scheduling path.
 
 After the unified Worker is deployed, its Discord interactions endpoint must be set to:
 
@@ -57,4 +59,4 @@ The upstream research states that GATE schedules are time-seeded and shared acro
 - `state.json` — saved board deadline and last posted board message ID
 - `ATTRIBUTION.md` — upstream project credit/license note
 
-**Migration note:** this branch is preparation-only. Do not merge or deploy it until the unified Worker is deployed separately, the GitHub URL secret points to the new Worker, the secret matches Cloudflare, both slash commands are registered, and the test checklist passes.
+**Deployment note:** deploy the unified Worker first so its Cloudflare cron trigger is active, then merge this scheduler PR. The existing board webhook and saved board state are retained.
