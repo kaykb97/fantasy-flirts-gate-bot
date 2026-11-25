@@ -6,8 +6,9 @@ Posts a rolling prediction board showing the **next nine GATEs** (three hours of
 
 - **Public board:** refreshes every **120 minutes** on even-hour boundaries in America/New_York time (00:00, 02:00, 04:00, and so on).
 - **Replacement:** posts the new board first, then attempts to delete the previous board message using the saved message ID.
-- **Private alerts:** the unified Flirtingway Help Cloudflare Worker checks every **5 minutes** and sends DMs up to **15 minutes** before a GATE. This runs independently of GitHub Actions, so board-post timing and GitHub schedule delays cannot suppress private alerts.
-- **Delivery recovery:** a failed delivery is retried on the next 5-minute check; an abandoned pending claim is eligible for retry after 10 minutes. Successful slots are deduplicated per subscriber and never sent twice.
+- **Private alerts:** the unified Flirtingway Help Cloudflare Worker checks every **5 minutes** and sends DMs up to **15 minutes** before a GATE.
+- **Public board:** the same Cloudflare cron refreshes the public nine-GATE board every **2 hours**, posts the replacement first, and removes the previous board message. The webhook URL is encrypted before it is stored in the shared D1 database. GitHub Actions is no longer the public-board clock.
+- **Delivery recovery:** a failed DM is retried on the next 5-minute check; an abandoned pending claim is eligible for retry after 10 minutes. Successful slots are deduplicated per subscriber and never sent twice.
 - **Timezone display:** board timestamps use Discord timestamp markup, so each member sees times in their own local timezone. Eastern Time boundaries account for daylight-saving transitions.
 
 ## GitHub Actions configuration
