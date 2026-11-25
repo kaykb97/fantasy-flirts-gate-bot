@@ -6,7 +6,8 @@ Posts a rolling prediction board showing the **next nine GATEs** (three hours of
 
 - **Public board:** refreshes every **120 minutes** on even-hour boundaries in America/New_York time (00:00, 02:00, 04:00, and so on).
 - **Replacement:** posts the new board first, then attempts to delete the previous board message using the saved message ID.
-- **Private alerts:** the GitHub Actions workflow still checks every **5 minutes**. The private-alert lead window remains **15 minutes** before a GATE.
+- **Private alerts:** the unified Flirtingway Help Cloudflare Worker checks every **5 minutes** and sends DMs up to **15 minutes** before a GATE. This runs independently of GitHub Actions, so board-post timing and GitHub schedule delays cannot suppress private alerts.
+- **Delivery recovery:** a failed delivery is retried on the next 5-minute check; an abandoned pending claim is eligible for retry after 10 minutes. Successful slots are deduplicated per subscriber and never sent twice.
 - **Timezone display:** board timestamps use Discord timestamp markup, so each member sees times in their own local timezone. Eastern Time boundaries account for daylight-saving transitions.
 
 ## GitHub Actions configuration
@@ -14,12 +15,11 @@ Posts a rolling prediction board showing the **next nine GATEs** (three hours of
 The scheduler requires these repository settings:
 
 - `DISCORD_WEBHOOK_URL` — existing Discord webhook URL for the public GATE board. Keep it in GitHub Actions secrets.
-- `GATE_ALERTS_WORKER_URL` — the base URL of the unified `Flirtingway Help` Worker, without `/interactions`. It must point to `https://flirtingway-help.kalynkb97.workers.dev`, not the retired GATE Worker URL.
-- `GATE_ALERTS_WORKER_SECRET` — must exactly match the `SCHEDULER_SECRET` secret configured on the unified Cloudflare Worker.
+- `GATE_ALERTS_WORKER_SECRET` — used only by the manual command-registration workflow; it must exactly match the `SCHEDULER_SECRET` configured on the unified Cloudflare Worker.
 - `GITHUB_TOKEN` and `GITHUB_REPOSITORY` are supplied by GitHub Actions.
 - `GATE_STATE_BRANCH` is set by the workflow to the selected ref so manual test runs do not update `main` accidentally.
 
-The workflow runs every five minutes. On each run it checks the next public-board deadline and independently checks whether any private GATE DM is due. The first run after the schedule-version migration initializes the next two-hour boundary and does not post a surprise board. After that, the board refreshes at the saved deadline.
+The workflow runs on a five-minute check cadence for the public-board deadline. The first run after the schedule-version migration initializes the next two-hour boundary and does not post a surprise board. After that, the board refreshes at the saved deadline. Private GATE DMs do not depend on this workflow.
 
 Manual **Force post immediately** is a deliberate board-post test: it posts to the configured webhook and replaces the saved previous board message. Use it only when the configured webhook points to the channel you intend to test. A forced post does not send subscriber DMs.
 
@@ -38,7 +38,7 @@ After the unified Worker is deployed, its Discord interactions endpoint must be 
 
 `https://flirtingway-help.kalynkb97.workers.dev/interactions`
 
-The two command registrations are intentionally separate in scope: `/housing` is global and `/gatealerts` is registered to the configured test/server guild. This avoids one bulk command registration overwriting the other.
+The two command registrations are intentionally separate in scope: `/housing` is global and `/gatealerts` is registered to the configured test/server guild. This avoids one bulk command registration overwriting the other. The same unified Worker owns the 5-minute private GATE DM cron and the `deliveries` idempotency/retry state.
 
 ## Prediction algorithm
 
@@ -50,8 +50,8 @@ The upstream research states that GATE schedules are time-seeded and shared acro
 
 ## Files
 
-- `bot.py` — prediction algorithm, nine-GATE board, two-hour refresh, and private-alert Worker call
-- `.github/workflows/daily.yml` — five-minute scheduler/DM checks
+- `bot.py` — prediction algorithm, nine-GATE board, and two-hour refresh
+- `.github/workflows/daily.yml` — public-board scheduler only
 - `tests/test_scheduler.py` — two-hour cadence, DST, and private-alert lead-window tests
 - `.github/workflows/validate-scheduler.yml` — scheduler validation workflow
 - `state.json` — saved board deadline and last posted board message ID
