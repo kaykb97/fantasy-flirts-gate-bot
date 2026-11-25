@@ -5,10 +5,12 @@ Prediction method/weights are adapted from the MIT-licensed community research:
 https://github.com/rooroodev/ffxivgateschedule
 See ATTRIBUTION.md.
 
-The workflow checks every 15 minutes, but this script creates a NEW Discord
-message only when the saved 15-minute clock deadline is due. Manual runs do not bypass
-the deadline unless FORCE_POST=true. Optional private GATE DMs are handled by the Cloudflare Worker when configured. The webhook's saved Discord name and avatar
-are used; this code intentionally does not override them.
+The GitHub workflow publishes the public board on a 120-minute cadence. Private
+GATE DMs are scheduled independently by the unified Flirtingway Help Cloudflare
+Worker every 5 minutes, using the shared D1 subscriptions table. Each board refresh
+posts the replacement board and removes the previous board message when possible.
+Manual runs do not bypass the board deadline unless FORCE_POST=true. The webhook's
+saved Discord name and avatar are used; this code intentionally does not override them.
 """
 from __future__ import annotations
 
@@ -18,14 +20,15 @@ import json
 import os
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
+from urllib.parse import quote
 
 import requests
 
 SLOT_SECONDS = 20 * 60
 GATES_TO_SHOW = 9
-REFRESH_INTERVAL_SECONDS = 15 * 60
+REFRESH_INTERVAL_SECONDS = 15 * 60  # Private DM lead window; independent of board cadence.
 SCHEDULE_TIMEZONE = ZoneInfo("America/New_York")
-SCHEDULE_VERSION = 3
+SCHEDULE_VERSION = 4
 EMBED_BLUE = 0x287BFF
 
 AFO_CIELDALAES = (
@@ -83,7 +86,7 @@ EMOJI = {
 
 
 def build_gate_notification(now_ts: int) -> dict | None:
-    """Identify the next GATE slot that falls inside the 15-minute alert window."""
+    """Identify the next GATE slot that falls inside the private-alert lead window."""
     current_slot = (now_ts // SLOT_SECONDS) * SLOT_SECONDS
     next_slot = current_slot + SLOT_SECONDS
     seconds_until_next = next_slot - now_ts
@@ -99,39 +102,6 @@ def build_gate_notification(now_ts: int) -> dict | None:
         "event_name": event_name,
         "variant": variant,
     }
-
-
-def send_gate_dm_notifications(now_ts: int) -> None:
-    """Ask the Cloudflare Worker to DM members subscribed to this upcoming GATE."""
-    worker_url = os.environ.get("GATE_ALERTS_WORKER_URL", "").rstrip("/")
-    worker_secret = os.environ.get("GATE_ALERTS_WORKER_SECRET", "")
-    if not worker_url or not worker_secret:
-        print("DM alerts are not configured yet; skipping private notifications.")
-        return
-
-    alert = build_gate_notification(now_ts)
-    if not alert:
-        print("No GATE falls inside the current DM alert window.")
-        return
-
-    try:
-        response = requests.post(
-            worker_url + "/notify",
-            headers={"Authorization": f"Bearer {worker_secret}"},
-            json=alert,
-            timeout=30,
-        )
-        response.raise_for_status()
-        result = response.json()
-        print(
-            "Private GATE alerts processed: "
-            f"{result.get('sent', 0)} sent, "
-            f"{result.get('failed', 0)} failed, "
-            f"{result.get('already_sent', 0)} already sent."
-        )
-    except (requests.RequestException, ValueError) as error:
-        # Do not skip saving the board schedule if the optional DM service is unavailable.
-        print(f"Private GATE notification service failed: {error}")
 
 
 def xorshift128(seed: int):
@@ -162,9 +132,14 @@ def predict_gate(slot_start: int) -> tuple[str, str | None]:
     return gate.name, variant
 
 def next_refresh_timestamp(now_ts: int) -> int:
-    """Next 15-minute clock boundary in Eastern Time (:00, :15, :30, :45)."""
+    """Next two-hour clock boundary in Eastern Time (00:00, 02:00, ...)."""
     now_local = datetime.fromtimestamp(now_ts, SCHEDULE_TIMEZONE)
-    boundary = now_local.replace(second=0, microsecond=0) + timedelta(minutes=15 - (now_local.minute % 15))
+    next_hour = ((now_local.hour // 2) + 1) * 2
+    boundary = now_local.replace(minute=0, second=0, microsecond=0)
+    if next_hour >= 24:
+        boundary = boundary.replace(hour=0) + timedelta(days=1)
+    else:
+        boundary = boundary.replace(hour=next_hour)
     return int(boundary.timestamp())
 
 def build_embed(now: datetime) -> dict:
@@ -207,7 +182,15 @@ def github_headers(token: str) -> dict:
     }
 
 def read_state(repo: str, token: str):
-    url = f"https://api.github.com/repos/{repo}/contents/state.json"
+    state_branch = (
+        os.environ.get("GATE_STATE_BRANCH")
+        or os.environ.get("GITHUB_REF_NAME")
+        or "main"
+    )
+    url = (
+        f"https://api.github.com/repos/{repo}/contents/state.json"
+        f"?ref={quote(state_branch, safe="")}"
+    )
     response = requests.get(url, headers=github_headers(token), timeout=20)
     if response.status_code == 404:
         return {}, None
@@ -230,10 +213,15 @@ def write_state(repo: str, token: str, state: dict, sha: str | None):
     encoded = base64.b64encode(
         (json.dumps(state, indent=2) + "\n").encode("utf-8")
     ).decode("ascii")
+    state_branch = (
+        os.environ.get("GATE_STATE_BRANCH")
+        or os.environ.get("GITHUB_REF_NAME")
+        or "main"
+    )
     payload = {
         "message": "Save Flirtingway GATE posting schedule",
         "content": encoded,
-        "branch": "main",
+        "branch": state_branch,
     }
     if sha:
         payload["sha"] = sha
@@ -257,8 +245,8 @@ def main():
     schedule_version = state.get("schedule_version", 0)
     previous_due = state.get("next_due_ts")
 
-    # Migrate the previous rolling 15-minute schedule to fixed Eastern clock
-    # boundaries. Save the next boundary and wait; do not create a surprise post.
+    # Migrate the previous schedule to fixed two-hour Eastern clock boundaries.
+    # Save the next boundary and wait; do not create a surprise post.
     if schedule_version != SCHEDULE_VERSION or previous_due is None:
         state.update({
             "schedule_version": SCHEDULE_VERSION,
@@ -266,21 +254,19 @@ def main():
         })
         write_state(repo, token, state, state_sha)
         print(
-            "Initialized the fixed Eastern 15-minute schedule. "
+            "Initialized the fixed Eastern two-hour schedule. "
             f"Next post is due at {datetime.fromtimestamp(next_boundary, SCHEDULE_TIMEZONE).isoformat()}."
         )
         return
 
     due = now_ts >= int(previous_due)
     if not due and not force_post:
-        # Check private GATE subscriptions on every five-minute workflow run,
-        # independently of whether a new public board post is due.
-        send_gate_dm_notifications(now_ts)
+        # Private GATE DMs are handled by the Flirtingway Help Cloudflare cron.
         due_text = datetime.fromtimestamp(int(previous_due), SCHEDULE_TIMEZONE).isoformat()
         print(f"Board not due yet; next post is scheduled for {due_text}.")
         return
 
-    # Posts always point to the next fixed 15-minute Eastern clock boundary,
+    # Posts always point to the next fixed two-hour Eastern clock boundary,
     # regardless of small GitHub Actions scheduling delays or manual runs.
     next_due = next_refresh_timestamp(now_ts)
     payload = {
@@ -289,15 +275,24 @@ def main():
         "allowed_mentions": {"parse": []},
     }
 
-    # Each due cycle creates one NEW message. Prior posts remain in the channel.
+    # Post the new board first, then remove the previous board to avoid a blank channel.
     response = requests.post(webhook + "?wait=true", json=payload, timeout=20)
     response.raise_for_status()
     message_id = response.json().get("id")
 
-    # Manual force-posts are for board testing and never DM subscribers.
-    if not force_post:
-        send_gate_dm_notifications(now_ts)
+    previous_message_id = state.get("last_message_id")
+    if previous_message_id and str(previous_message_id) != str(message_id):
+        try:
+            delete_response = requests.delete(
+                webhook + f"/messages/{previous_message_id}", timeout=20
+            )
+            if delete_response.status_code not in (204, 404):
+                delete_response.raise_for_status()
+            print(f"Removed previous GATE board message ({previous_message_id}).")
+        except requests.RequestException as error:
+            print(f"Could not remove previous GATE board message ({previous_message_id}): {error}")
 
+    # Private GATE notifications run independently from this public-board workflow.
     # Save the next deadline only after Discord confirms the post succeeded.
     write_state(
         repo,
