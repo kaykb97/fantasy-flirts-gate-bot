@@ -1,85 +1,60 @@
-# Fantasy Flirts — Rolling GATE Board
+# Flirtingway Help — GATE Board Scheduler
 
-Posts a rolling prediction board showing the **next nine GATEs** (three hours of coverage) in your Discord channel. GATE slots are spaced 20 minutes apart.
+Posts a rolling prediction board showing the **next nine GATEs** (three hours of coverage) in the configured Discord channel. GATE slots are spaced 20 minutes apart.
 
-## Important timezone behavior
+## Schedule behavior
 
-The GATE algorithm uses UTC Unix time. The post uses Discord timestamp markup (`<t:...:t>`), so **each member sees the schedule times in their own Discord-local timezone**. The board is refreshed every **15 minutes** (:00, :15, :30, and :45) in Eastern Time. Daylight saving time is handled automatically. Discord relative timestamps show each member the time remaining in their own local timezone.
+- **Public board:** refreshes every **120 minutes** on even-hour boundaries in America/New_York time (00:00, 02:00, 04:00, and so on).
+- **Replacement:** posts the new board first, then attempts to delete the previous board message using the saved message ID.
+- **Private alerts:** the GitHub Actions workflow still checks every **5 minutes**. The private-alert lead window remains **15 minutes** before a GATE.
+- **Timezone display:** board timestamps use Discord timestamp markup, so each member sees times in their own local timezone. Eastern Time boundaries account for daylight-saving transitions.
 
-## Free hosting: GitHub Actions + Discord webhook
+## GitHub Actions configuration
 
-This version does not need a continuously running bot process or a paid host. GitHub Actions checks every 5 minutes. The public board posts every 15 minutes; private GATE DM subscriptions are checked every 5 minutes.
+The scheduler requires these repository settings:
 
-### 1. Create a Discord webhook in #events
+- `DISCORD_WEBHOOK_URL` — existing Discord webhook URL for the public GATE board. Keep it in GitHub Actions secrets.
+- `GATE_ALERTS_WORKER_URL` — the base URL of the unified `Flirtingway Help` Worker, without `/interactions`. It must point to `https://flirtingway-help.kalynkb97.workers.dev`, not the retired GATE Worker URL.
+- `GATE_ALERTS_WORKER_SECRET` — must exactly match the `SCHEDULER_SECRET` secret configured on the unified Cloudflare Worker.
+- `GITHUB_TOKEN` and `GITHUB_REPOSITORY` are supplied by GitHub Actions.
+- `GATE_STATE_BRANCH` is set by the workflow to the selected ref so manual test runs do not update `main` accidentally.
 
-1. In Discord, open **Server Settings → Integrations → Webhooks**.
-2. Create a webhook named `Fantasy Flirts GATE Guide`.
-3. Select your existing `#events` channel.
-4. Copy the webhook URL. **Treat it like a password**; anyone with it can post to that channel.
+The workflow runs every five minutes. On each run it checks the next public-board deadline and independently checks whether any private GATE DM is due. The first run after the schedule-version migration initializes the next two-hour boundary and does not post a surprise board. After that, the board refreshes at the saved deadline.
 
-### 2. Put this project in a GitHub repository
+Manual **Force post immediately** is a deliberate board-post test: it posts to the configured webhook and replaces the saved previous board message. Use it only when the configured webhook points to the channel you intend to test. A forced post does not send subscriber DMs.
 
-1. Create a repository at https://github.com/new (a private repository is fine).
-2. Upload the files from this folder, keeping the `.github/workflows/daily.yml` path intact.
-3. In the repository, open **Settings → Secrets and variables → Actions → New repository secret**.
-4. Name it exactly `DISCORD_WEBHOOK_URL`.
-5. Paste the webhook URL as the secret value.
+## Unified Worker integration
 
-### 3. Enable GitHub Actions
+The slash-command and DM service is now being consolidated into the separate `Flirtingway Help` Cloudflare Worker in the `kaykb97/fantasy-flirts-housing-bot` repository. That Worker:
 
-1. Open the repository's **Actions** tab.
-2. If prompted, enable workflows.
-3. Open **Flirtingway GATE Scheduler** and choose **Run workflow** to run a check. To post immediately, select **Force post immediately**.
-4. Scheduled checks continue every 5 minutes. The public board follows its fixed 15-minute Eastern clock schedule, while private GATE DM alerts are checked every 5 minutes.
+- serves both `/housing` and `/gatealerts` through the new Discord application's `/interactions` endpoint;
+- uses the existing `flirtingway-gate-alerts` D1 database and its `subscriptions` and `deliveries` tables without recreating or migrating them;
+- keeps Housing searches on-demand only;
+- authenticates `/notify` and the two internal command-registration endpoints with `SCHEDULER_SECRET`.
 
-GitHub Actions is free within GitHub's included usage allowances. For the most reliable no-cost operation, a public repository also receives free standard GitHub-hosted runner usage. Keep the webhook URL only in repository Secrets, never in source code.
+The unified Worker has its own Wrangler configuration at `worker/wrangler.toml`. Its deployment is manual-only while the consolidation is being tested. The original Housing and GATE Workers remain available for rollback; do not disable them until the new bot has passed testing and cutover is explicitly approved.
 
-## Private GATE DM alerts
+After the unified Worker is deployed, its Discord interactions endpoint must be set to:
 
-Members can use `/gatealerts` inside the server to choose any combination of the five GATE events. The menu is private to the member and includes pause, resume, and unsubscribe controls. When one of their selected events is approaching, Flirtingway sends a direct message. Each member receives at most one alert per GATE time slot. Members must allow DMs from server members; Discord can block delivery through their privacy settings.
+`https://flirtingway-help.kalynkb97.workers.dev/interactions`
 
-The DM feature runs as a Cloudflare Worker with a D1 database. The existing GitHub Actions schedule remains responsible for the board; after each scheduled board post, it asks the Worker to deliver any due private alerts.
+The two command registrations are intentionally separate in scope: `/housing` is global and `/gatealerts` is registered to the configured test/server guild. This avoids one bulk command registration overwriting the other.
 
-### Setup (one-time)
-
-1. **Create the Discord application.** In the Discord Developer Portal, create an application, add a bot user, and copy the bot token. From General Information, copy the Application ID and Public Key. Also copy your Discord server ID (enable Developer Mode in User Settings → Advanced, then use the server context menu → Copy Server ID). Never share the bot token in chat or commit it to GitHub.
-2. **Invite the bot to the server.** In OAuth2 → URL Generator, select the `bot` and `applications.commands` scopes. A zero-permission bot invite is sufficient; the Worker responds to slash commands and sends DMs through the Discord API.
-3. **Create a Cloudflare D1 database** named `flirtingway-gate-alerts`. Copy its Database ID and your Cloudflare Account ID.
-4. **Set the D1 ID in `worker/wrangler.toml`.** Replace `REPLACE_WITH_YOUR_D1_DATABASE_ID` with the database ID. Commit that change.
-5. **Create a Cloudflare API token** with permission to edit the `flirtingway-gate-alerts` Worker and the `flirtingway-gate-alerts` D1 database. Add the token as a GitHub repository Actions secret named `CLOUDFLARE_API_TOKEN`. The account ID is already set in the deployment workflow; it is an identifier, not a secret.
-6. **Deploy the Worker.** In GitHub → Actions, run **Deploy Flirtingway DM Alerts Worker**. This applies the D1 migration and deploys the Worker. Its URL will look like `https://flirtingway-gate-alerts.<your-subdomain>.workers.dev`.
-7. **Add Worker settings** in Cloudflare → Workers & Pages → flirtingway-gate-alerts → Settings → Variables and Secrets:
-   - Variables: `DISCORD_PUBLIC_KEY`, `DISCORD_APPLICATION_ID`, and `DISCORD_GUILD_ID`.
-   - Secrets: `DISCORD_BOT_TOKEN` and `SCHEDULER_SECRET`.
-   Generate a long random value for `SCHEDULER_SECRET`; use the exact same value in the GitHub secret in the next step.
-8. **Connect GitHub Actions to the Worker.** Add repository secrets `GATE_ALERTS_WORKER_URL` (the Worker URL, without `/interactions`) and `GATE_ALERTS_WORKER_SECRET` (the same value as `SCHEDULER_SECRET`).
-9. **Connect Discord interactions.** In the Discord Developer Portal, set Interactions Endpoint URL to the Worker URL followed by `/interactions`. Discord verifies the endpoint; the Worker responds to that check and automatically registers the server-only `/gatealerts` command.
-10. **Try `/gatealerts` in your Discord server.** Choose events in the private menu. The Worker stores choices in D1, and the scheduled board workflow handles private notifications.
-
-The Worker source is in `worker/src/index.js`; its D1 schema is in `worker/migrations/`. Deployment is manual so the Worker won't attempt to deploy until your Cloudflare database and GitHub secrets are ready.
-
-## Prediction algorithm and patch updates
+## Prediction algorithm
 
 The prediction logic and weights are adapted from the MIT-licensed community research project:
+
 https://github.com/rooroodev/ffxivgateschedule
 
-The upstream research states that GATE schedules are time-seeded and shared across worlds/regions on the same game version. It also documents the current weights and variants. If a future FFXIV patch changes the schedule, update `EVENTS` and variant definitions in `bot.py` using the upstream project's latest research.
-
-## Manual local test
-
-Requires Python 3.10+:
-
-```bash
-python -m pip install -r requirements.txt
-DISCORD_WEBHOOK_URL="your-webhook-url" python bot.py
-```
-
-A local run follows the saved board schedule unless `FORCE_POST=true` is set. DM notifications are checked on each scheduled run when the Worker URL and secret are configured. Do not paste your real webhook URL into chat, source code, screenshots, or a public issue.
+The upstream research states that GATE schedules are time-seeded and shared across worlds/regions on the same game version. If a future FFXIV patch changes the schedule, update `EVENTS` and variant definitions in `bot.py` using the upstream project's latest research.
 
 ## Files
 
-- `bot.py` — prediction algorithm, nine-gate board, and fixed 15-minute Eastern posting schedule
-- `.github/workflows/daily.yml` — 5-minute DM checks and a 15-minute board schedule
-- `worker/` — Discord slash-command endpoint, DM delivery, and D1 subscription database
-- `requirements.txt` — HTTP dependency
+- `bot.py` — prediction algorithm, nine-GATE board, two-hour refresh, and private-alert Worker call
+- `.github/workflows/daily.yml` — five-minute scheduler/DM checks
+- `tests/test_scheduler.py` — two-hour cadence, DST, and private-alert lead-window tests
+- `.github/workflows/validate-scheduler.yml` — scheduler validation workflow
+- `state.json` — saved board deadline and last posted board message ID
 - `ATTRIBUTION.md` — upstream project credit/license note
+
+**Migration note:** this branch is preparation-only. Do not merge or deploy it until the unified Worker is deployed separately, the GitHub URL secret points to the new Worker, the secret matches Cloudflare, both slash commands are registered, and the test checklist passes.
