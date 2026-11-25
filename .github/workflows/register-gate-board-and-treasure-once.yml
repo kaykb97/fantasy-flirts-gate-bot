@@ -1,0 +1,59 @@
+name: One-time register Flirtingway board and treasure command
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/register-gate-board-and-treasure-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure the existing board webhook and register /treasure
+        env:
+          WORKER_URL: https://flirtingway-help.kalynkb97.workers.dev
+          SCHEDULER_SECRET: ${{ secrets.GATE_ALERTS_WORKER_SECRET }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          EXISTING_BOARD_MESSAGE_ID: "1574974614160019587"
+        run: |
+          set -euo pipefail
+          python - <<'PY' > board-registration.json
+          import json, os
+          print(json.dumps({
+              "webhook_url": os.environ["DISCORD_WEBHOOK_URL"],
+              "last_message_id": os.environ["EXISTING_BOARD_MESSAGE_ID"],
+              "post_immediately": True,
+          }))
+          PY
+
+          response_file=$(mktemp)
+          status=$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+            --request POST "$WORKER_URL/register-board" \
+            --header "Authorization: Bearer $SCHEDULER_SECRET" \
+            --header "Content-Type: application/json" \
+            --data-binary @board-registration.json)
+          echo "Public GATE board registration returned HTTP $status"
+          cat "$response_file"
+          rm -f "$response_file" board-registration.json
+          if [ "$status" != "200" ]; then
+            echo "Board registration failed"
+            exit 1
+          fi
+
+          response_file=$(mktemp)
+          status=$(curl --silent --show-error --output "$response_file" --write-out "%{http_code}" \
+            --request POST "$WORKER_URL/register-housing" \
+            --header "Authorization: Bearer $SCHEDULER_SECRET")
+          echo "/housing and /treasure command registration returned HTTP $status"
+          cat "$response_file"
+          rm -f "$response_file"
+          if [ "$status" != "200" ]; then
+            echo "Slash-command registration failed"
+            exit 1
+          fi
+
+          echo "Board webhook stored encrypted and global housing/treasure commands registered."
