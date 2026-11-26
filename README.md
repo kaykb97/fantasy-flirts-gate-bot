@@ -1,6 +1,6 @@
 # Flirtingway Help — GATE Board Scheduler (legacy rollback reference)
 
-**Retirement status (2026-11-26):** Owner confirmed the unified Flirtingway Help bot delivered the 3:05 PM Eastern private alert and successfully refreshed the public board at 4 PM Eastern. Active production is now `kaykb97/flirtingway-help`. This repository and its application are retained for rollback only. Do not run manual scheduler, registration or deployment workflows without a deliberate rollback review. The old Discord bot's removal is not yet confirmed.
+**Retirement status (2026-11-26):** Owner confirmed the unified Flirtingway Help bot delivered the 3:05 PM Eastern private alert and successfully refreshed the public board at 4 PM Eastern. Active production is now `kaykb97/flirtingway-help`. This repository and its application are retained for rollback only. Do not run manual scheduler, registration or deployment workflows without a deliberate rollback review. Owner confirmed on 2026-11-26 that the old Discord bot was removed from all servers. Discord-side retirement is complete; the legacy application, repository, and infrastructure are retained as rollback references. Post-removal delivery has not yet been independently verified.
 
 Posts a rolling prediction board showing the **next nine GATEs** (three hours of coverage) in the configured Discord channel. GATE slots are spaced 20 minutes apart.
 
