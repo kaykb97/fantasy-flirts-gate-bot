@@ -1,4 +1,6 @@
-# Flirtingway Help — GATE Board Scheduler
+# Flirtingway Help — GATE Board Scheduler (legacy rollback reference)
+
+**Retirement status (2026-11-26):** Owner confirmed the unified Flirtingway Help bot delivered the 3:05 PM Eastern private alert and successfully refreshed the public board at 4 PM Eastern. Active production is now `kaykb97/flirtingway-help`. This repository and its application are retained for rollback only. Do not run manual scheduler, registration or deployment workflows without a deliberate rollback review. The old Discord bot's removal is not yet confirmed.
 
 Posts a rolling prediction board showing the **next nine GATEs** (three hours of coverage) in the configured Discord channel. GATE slots are spaced 20 minutes apart.
 
@@ -20,7 +22,7 @@ The scheduler requires these repository settings:
 - `GITHUB_TOKEN` and `GITHUB_REPOSITORY` are supplied by GitHub Actions.
 - `GATE_STATE_BRANCH` is set by the workflow to the selected ref so manual test runs do not update `main` accidentally.
 
-The workflow runs on a five-minute check cadence for the public-board deadline. The first run after the schedule-version migration initializes the next two-hour boundary and does not post a surprise board. After that, the board refreshes at the saved deadline. Private GATE DMs do not depend on this workflow.
+Historically the workflow ran on a five-minute check cadence for the public-board deadline; it is now manual-only. The first run after the schedule-version migration initializes the next two-hour boundary and does not post a surprise board. After that, the board refreshes at the saved deadline. Private GATE DMs do not depend on this workflow.
 
 Manual **Force post immediately** is a deliberate board-post test: it posts to the configured webhook and replaces the saved previous board message. Use it only when the configured webhook points to the channel you intend to test. A forced post does not send subscriber DMs.
 
